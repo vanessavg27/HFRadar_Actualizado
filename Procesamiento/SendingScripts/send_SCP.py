@@ -1,3 +1,4 @@
+#!/usr/bin/env
 import os,glob,datetime
 import argparse
 import pexpect #pip install --user  pexpect
@@ -35,19 +36,19 @@ def sendBySCP(Incommand, location): #"%04d/%02d/%02d 00:00:00"%(tnow.year,tnow.m
 			#usual response > wmaster@jro-app.igp.gob.pe's password:
 			console.sendline(password)
 		time.sleep(7)
-		console.expect(pexpect.EOF)
+		#console.expect(pexpect.EOF)
 		return True
 	except(Exception, e):
 		if debug:
 			print(str(e))
 		return False
 
-###################################INGRESANDO CODIGO 0 o 2##############################################################
+################################### INGRESANDO CODIGO 0 o 2 ##############################################################
 parser = argparse.ArgumentParser()
 parser.add_argument('-code',action='store',dest='code_seleccionado',help='Code para generar Spectro off-line 0,1,2')
-parser.add_argument('-lo',action='store',dest='localstation',default =11 ,help='Codigo de estacion 11 JRO A, 12 JRO B, 21 HYO A, 22 HYO B, etc..')
-parser.add_argument('-path',action='store',dest='path',default= "/home/soporte/Pictures/", help='Directorio principal donde estan los resultados a enviar')
-parser.add_argument('-type',action='store',dest='type',default ="params" ,help='Determines the type of data to be sent')
+parser.add_argument('-lo',action='store',dest='localstation', default =11,help='Codigo de estacion 11 JRO A, 12 JRO B, 21 HYO A, 22 HYO B, etc..')
+parser.add_argument('-path',action='store',dest='path',default="/home/soporte/Pictures/", help='Directorio principal donde estan los resultados a enviar')
+parser.add_argument('-type',action='store',dest='type',default="params" ,help='Determines the type of data to be sent')
 
 
 results= parser.parse_args()
@@ -93,14 +94,14 @@ if rxcode in [11, 12, 21, 22]:
 else:
 	lo = int(rxcode/10)*10+1
 
-print("PATH CAUSA:",PATH)
+print("PATH: ",PATH)
 
 if datatype == "params":
 	graph_freq0=PATH+"GRAPHICS_SCHAIN_%s/"%location_dict[lo]+'sp'+str(code)+'1_f0'
 	graph_freq1=PATH+"GRAPHICS_SCHAIN_%s/"%location_dict[lo]+'sp'+str(code)+'1_f1'
 else:
-	graph_freq0 = PATH+"RTDI_%s/graphics_schain/"%station_orientation + 'sp'+str(code)+'1_f0'
-	graph_freq1 = PATH+"RTDI_%s/graphics_schain/"%station_orientation + 'sp'+str(code)+'1_f1'
+	graph_freq0 = PATH+"Pictures/RTDI_%s/graphics_schain/"%station_orientation + 'sp'+str(code)+'1_f0'
+	graph_freq1 = PATH+"Pictures/RTDI_%s/graphics_schain/"%station_orientation + 'sp'+str(code)+'1_f1'
 print("")
 print("GRAPH_FREQ0: ",graph_freq0)
 str_datatype = "*/" if datatype == "params" else ""
@@ -114,9 +115,9 @@ for file in dlist[:]: # Se usa una copia porque dlist puede ser modificado dentr
 	data_written = True #Flag that represents data_written
 	doy = 'd'+file
 	jpg_files = glob.glob("%s/%s/%s*.jpeg"%(graph_freq1, doy,str_datatype))
-	print("PRINTEA: ","%s/%s/%s*.jpeg"%(graph_freq1, doy,str_datatype))
+	#print("PRINTEA: ","%s/%s/%s*.jpeg"%(graph_freq1, doy,str_datatype))
 	jpg_files.sort()
-	print("LISTA",jpg_files)
+	#print("LISTA",jpg_files)
 	print("%s/%s/%s*.jpeg"%(graph_freq1, doy,str_datatype))
 	if len(jpg_files) is 0:
 		print('No hay RESULTADOS en la carpeta!!!')
@@ -181,7 +182,7 @@ for file in dlist[:]: # Se usa una copia porque dlist puede ser modificado dentr
 	#os.system("ssh wmaster@jro-app.igp.gob.pe -p 6633 %s "%(command_1))
 
 	#Segundo comando, pasar las imagenes necesarias para la freq 0
-	print("(3) Enviando resultados frecuencia 0")
+	print(" (3) Enviando resultados frecuencia 0")
 	temp_command = "scp -r -P 6633 %s/%s/%s%s%s%s%s*.%s wmaster@jro-app.igp.gob.pe:%s"%(graph_freq0,doy,str_datatype,
 	letter,YEAR, DAYOFYEAR_str, rxcode, extension, remote_folder)
 
