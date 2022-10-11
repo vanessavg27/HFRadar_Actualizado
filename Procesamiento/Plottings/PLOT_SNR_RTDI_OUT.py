@@ -263,21 +263,29 @@ for channel in Channels:
     filename = str('M%s'%(Days)+'.hdf5')
     print(path+filename)
     if lo in [11,12,21,22]:
+        if lo % 2 == 0:
+            station_type='B'
+        else:
+            station_type = 'A'
+            
         if int(channel) == 0:
             lo = lo
+            
         else:
             lo = lo
+            
     else:
         if int(channel) == 1:
             if lo in [31, 41, 51, 61]:
-                lo = lo + 1   
+                lo = lo + 1
+        station_type = 'A'        
 
     directorio_SNR = "/home/soporte/Pictures/%s/%s/d%s/"%(figpath, identifier,Days)
     try:
-        os.mkdir(directorio_SNR)
-    except OSError:
-        print("Error")
-        print("Fallo a creacion del directorio %s fallo"%(directorio_SNR))
+        #os.mkdir(directorio_SNR)
+        os.makedirs(directorio_SNR)
+    except FileExistError:
+        print("Carpeta existente: %s"%(directorio_SNR))
     else:
         print("Se ha creado el directorio: %s "%(directorio_SNR))
     
@@ -465,24 +473,24 @@ for channel in Channels:
 
     #print(list_noise)
     print(len(list_noise))
-    
-    
-    directorio_crear = "/home/soporte/RTDI_A/graphics_schain/%s/d%s/"%(identifier,Days)
+    writeParameters
+    print(station_type," **")
+    directorio_crear = "/home/soporte/RTDI_%s/graphics_schain/%s/d%s/"%(station_type,identifier,Days)
     #directorio_crear = "/home/soporte/RTDI_A/graphics_schain/%s/d%s/"%(identifier,Days)
     try:
-        os.mkdir(directorio_crear)
+        #os.mkdir(directorio_crear)
+        os.makedirs(directorio_crear)
     except OSError:
-        print("Error")
-        print("Fallo en la creacion del directorio %s "%(directorio_crear))
+        print("Carpeta existente: %s "%(directorio_crear))
     else:
-        print("Se ha creado el directorio: %s "%(directorio_crear))
+        print("Se ha creado el directorio: %s "%(directorio_crear), end='\n')
 
-    ruta_rtdi = "/home/soporte/RTDI_A/graphics_schain/%s/d%s/"%(identifier,Days)
+    ruta_rtdi = "/home/soporte/RTDI_%s/graphics_schain/%s/d%s/"%(station_type,identifier,Days)
 
               
     def create(filename_out,freq,lo,channel, identifier):
         fo=open(filename_out+'.out','w+')
-        fo.write('\n')
+        fo.write('\n\n')
         fo.write('JICAMARCA RADIO OBSERVATORY - IGP - OUT FILE\n')
         fo.write("Station: %d ,Frequency: %2.4f, Code: %d, Channel: %d \n\n"%(int(lo),float(freq),int(identifier[2]),int(channel)))
         line = 'N     Time(Hour)      Delay(Km)     V_Doppler(m/s)      Signal_Power(dB)      Noise+Interference(dB)      SNR(dB)'

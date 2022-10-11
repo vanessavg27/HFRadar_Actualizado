@@ -79,8 +79,7 @@ try:
     #os.mkdir(directorio_crear)
     os.makedirs(directorio_crear)
 except FileExistsError:
-    print("Ruta ya existe")
-    print("Fallo en la creacion del directorio %s "%(directorio_crear))
+    print("Carpeta existente: %s "%(directorio_crear))
 else:
     print("Se ha creado el directorio: %s "%(directorio_crear))
 
