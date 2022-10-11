@@ -61,6 +61,11 @@ else:
     ngraph= 1
     frequency = 364
 
+if lo %2 == 0:
+    station_type = 'B'
+else:
+    station_type = 'A'
+
 from datetime import datetime
 day = datetime.strptime(dates, "%Y/%m/%d")
 Days = day.strftime("%Y%j")
@@ -68,16 +73,18 @@ Days = day.strftime("%Y%j")
 #folder
 identifier = 'sp%s1_f%s'%(code, ngraph)
 
-directorio_crear = "/home/soporte/RTDI_A/graphics_schain/%s/d%s/"%(identifier,Days)
+directorio_crear = "/home/soporte/RTDI_%s/graphics_schain/%s/d%s/"%(station_type,identifier,Days)
+#os.makedirs(directorio_crear)
 try:
-    os.mkdir(directorio_crear)
-except OSError:
-    print("Error")
+    #os.mkdir(directorio_crear)
+    os.makedirs(directorio_crear)
+except FileExistsError:
+    print("Ruta ya existe")
     print("Fallo en la creacion del directorio %s "%(directorio_crear))
 else:
     print("Se ha creado el directorio: %s "%(directorio_crear))
 
-ruta_rtdi = "/home/soporte/RTDI_A/graphics_schain/%s/d%s/"%(identifier,Days)
+ruta_rtdi = "/home/soporte/RTDI_%s/graphics_schain/%s/d%s/"%(station_type,identifier,Days)
 #LECTURA MOMENTOS
 def bubbleSort(alist):
     for passnum in range(len(alist)-1,0,-1):
@@ -188,6 +195,7 @@ for channel in Channels:
     aux = numpy.zeros((int(ymax/1.5)-1-int(ymin/1.5),xmax*60-1 -  xmin*60, 3))
     plt.rcParams['figure.dpi'] = 100
     plt.rcParams['figure.figsize'] = [6.4,4.8]
+    #print(utime_minute)
     plt.title("RTDI %s"%(utime_minute[-1]))
     plt.xlabel("Local Time (hr)",color="k")
     plt.ylabel("Range (km)",color="k")
