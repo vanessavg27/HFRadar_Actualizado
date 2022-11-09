@@ -196,24 +196,22 @@ def GetImageSNR(data_input):
     sn1      = -20.0  #-10.0
     sn2      = 40.0
     npy      = image.shape[1]
-    print("NPY:",npy)
     nSamples = 1000.0
     r2       = min(nSamples,image.shape[0]-1)
-    print("r2:",r2)
+    #print("r2:",r2)
     r1       =int(r2*0.9)
-    print("r1:",r1)
+    #print("r1:",r1)
     ncount=0.0
     noise[0]=noise[1]=noise[2]=0.0
     for i in range(r1,r2):
         ncount += 1
         for j in range(npy):
             noise[j]+=image[i,j]
-    #print("Noise:",noise)
     #print("ncount",ncount)
 
     for j in range(npy):
         noise[j]/=ncount
-    print("Noise RGB",noise)
+    #print("Noise RGB",noise)
     buffer2=numpy.zeros((1000,3),dtype='float')
     for i in range(r2+1):
         for j in range(npy):
@@ -225,49 +223,8 @@ def GetImageSNR(data_input):
                 snr[j]=0.0
         buffer2[i]=snr[:]
     data_img_snr = buffer2
-    #print("DATA-IMG-SNR: ",data_img_snr)
     return data_img_snr
-    #"Aqui anadiendo lo puntos blancos"
-
-def GetImageSNR_filt(data_input):
-    image    = data_input.transpose()
-    noise    = list(range(3))
-    snr      = list(range(3))
-    sn1      = -20.0  #-10.0
-    sn2      = 40.0
-    npy      = image.shape[1]
-    print("NPY:",npy)
-    nSamples = 1000.0
-    r2       = min(nSamples,image.shape[0]-1)
-    print("r2:",r2)
-    r1       =int(r2*0.9)
-    print("r1:",r1)
-    ncount=0.0
-    #noise[0]=noise[1]=noise[2]=0.0
-    #for i in range(r1,r2):
-    #    ncount += 1
-    #    for j in range(npy):
-    #        noise[j]+=image[i,j]
-    #print("Noise:",noise)
-    #print("ncount",ncount)
-
-    #for j in range(npy):
-    #    noise[j]/=ncount
-    print("Noise RGB",noise)
-    buffer2=numpy.zeros((1000,3),dtype='float')
-    for i in range(r2+1):
-        for j in range(npy):
-            snr[j]=(image[i,j]-noise[j])/noise[j]
-            if (snr[j]> 0.01):
-                #print("SNR-RGB:",10.0*math.log10(snr[j]))
-                snr[j]=(10.0*math.log10(snr[j])-sn1)/(sn2-sn1)
-            else:
-                snr[j]=0.0
-        buffer2[i]=snr[:]
-    data_img_snr = buffer2
-    #print("DATA-IMG-SNR: ",data_img_snr)
-    return data_img_snr
-    #"Aqui anadiendo lo puntos blancos"
+    
 
 #def data(folder,directorio,nc,Days,code):
 folder = "sp%s1_f%s"%(code,ngraph)
@@ -301,7 +258,7 @@ if R == 1:
         filelist = sorted(list(f.keys()))
         f.close()
     except OSError:
-        print("    Aun no existe el archivo:",path+'.hdf5')
+        print("    NO EXISTE EL ARCHIVO DE LECTURA:",path+'.hdf5')
         exit()
 
 ntime      = len(filelist)
@@ -335,25 +292,17 @@ for chan in Channels:
         nsets=int(nc/nc) #600
         k=0
         npeaks=5
-        print(filename)
+        
         for k in range(nsets):
             if R ==1:
                 four  = read_newdata(path,filename,nc,value='pw'+str(chan)+'_C'+str(code)).swapaxes(0,1)    
             else:
                 four  = getDatavaluefromDirFilename(path=path,file=filename,value='pw'+str(chan)+'_C'+str(code)).swapaxes(0,1)
-            print("FOUR.shape:",four.shape)
+            
             
             pspec +=four[:,k*nc:(k+1)*nc]
         l = 0
-        print("PSPEC: ",pspec.shape)
-
-#        for l in range(nrange):
-#            if l==0:
-#                new_pspec[0]= pspec[0]
-#            elif(l<nrange-1):
-#                new_pspec[l]=(pspec[l-1]+pspec[l]+pspec[l+1])/3 #Probando la division /3
-#            else:
-#                new_pspec[l]=pspec[l]
+        #print("PSPEC: ",pspec.shape)
 
         new_pspec = pspec
         from datetime import datetime
@@ -371,7 +320,6 @@ for chan in Channels:
 
         # ---------- CALCULO DEL RGB desde el pspec -------------------#
 
-        #data_RGB     = GetRGBData(new_pspec, threshv=0.33)
         #data_RGB     = GetRGBData(new_pspec, threshv=0.25)
         data_RGB     = GetRGBData_filt(new_pspec, threshv=0.167)
         #print("*** DATA-RGB",data_RGB)
@@ -380,8 +328,6 @@ for chan in Channels:
 
         #-----------------------------------------------------
         i = 0
-#        if R == 1:
-#            noise = getDatavaluefromDirFilename(path=path,file=filename,value='noise'+str(chan)+'_C'+str(code))
 
         for i in range(nrange):
             new_pspec[i,:] = new_pspec[i,:]-noise              #cambio a new_pspec
