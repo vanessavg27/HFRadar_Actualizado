@@ -284,7 +284,7 @@ for channel in Channels:
     try:
         #os.mkdir(directorio_SNR)
         os.makedirs(directorio_SNR)
-    except FileExistError:
+    except FileExistsError:
         print("Carpeta existente: %s"%(directorio_SNR))
     else:
         print("Se ha creado el directorio: %s "%(directorio_SNR))
