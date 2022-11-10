@@ -31,7 +31,7 @@ from kneed import KneeLocator
 from scipy.sparse import csr_matrix
 import argparse
 import glob
-import math,time,os,sys
+import math,time,os,sys,shutil
 
 #Almacenar Ploteo 
 #./Filtrado.py -f 2.72 -code 0 -C 1 -date "2022/08/29" -P 1
@@ -122,8 +122,8 @@ def epsilon(data, vecinos = 10):
     return eps
 
 def freq_to_spec(freq):
-
     pass
+
 def spec_to_freq(spec):
     #detectar si es convexo o concavo
     power = np.fft.ifftshift(spec.T,axes=0)
@@ -161,6 +161,11 @@ def delete_bands(ancho,matrix):
 
     return NewFullSpectra
 
+def delete_folder(path):
+    print("")
+    print("FOLDER ELIMINADO:",path)
+    #shutil.rmtree("%s"%(path))
+
 def Guardado_reducted(path,pw_ch0,pw_ch1,noise_a,noise_b,min_a,min_b):
     print("PATH GUARDADO: ",path)
     folder = path.split("/")[-2]
@@ -177,11 +182,11 @@ def Guardado_reducted(path,pw_ch0,pw_ch1,noise_a,noise_b,min_a,min_b):
     #image1 = np.array(f['image1_C%s'%(code)])
     tiempo = np.array(f['t'])
     f.close()
-
+    #print("HOLI:",'%s.hdf5'%(path_o+folder))
+    
     with h5py.File('%s.hdf5'%(path_o+folder),'a') as f:
     #with h5py.File('d%s.hdf5'%(day),'a') as f:
 
-        
         g = f.create_group('%s'%(name))
         g.create_dataset('pw0_C%s'%(code),data=pw_ch0)
         g.create_dataset('noise0_C%s'%(code),data=noise_a)
@@ -392,7 +397,13 @@ path     = path+"d"+day+'/'+folder
 graphics_folder = graphics_folder+"d"+day+'/'+folder+"/"
 path_o   = path_o+"d"+day+'/'+folder+'/'
 
-print ("Path:",path)
+print("Path:",path)
+#print("Path:",'%s.hdf5'%(path+folder))
+#print("Existe:",os.path.exists('%s.hdf5'%(path)))
+
+if os.path.exists('%s.hdf5'%(path)):
+    os.system('rm -r %s.hdf5'%(path))
+
 #------------------------------------------------------------------------------------------------------
 nrange=1000
 code = code
@@ -401,7 +412,6 @@ freq = float("%se6"%(freqs))
 files = glob.glob(path+"/spec-*.hdf5")
 files.sort()
 print(folder)
-#print(files)
 
 for CurrentSpec in files:
     print("Archivo",CurrentSpec)
@@ -618,8 +628,8 @@ for CurrentSpec in files:
         #New_Full_Spectra_a = csr_matrix((New_Full_Spectra_a,(f2_a,f1_a)),shape=(1000,nc))
         #New_Full_Spectra_b = csr_matrix((New_Full_Spectra_b,(f2_b,f1_b)),shape=(1000,nc))
 
-        #ploteado(New_Full_Spectra_a,min_a,New_Full_Spectra_b,min_b,FullSpectra_a,FullSpectra_b,name,graphics_folder,eps_a,eps_b)
-        #ploteado(New_Full_Spectra_a,Noise_a,New_Full_Spectra_b,Noise_b,FullSpectra_a,FullSpectra_b,name,graphics_folder,eps_a,eps_b)
+        ploteado(New_Full_Spectra_a,min_a,New_Full_Spectra_b,min_b,FullSpectra_a,FullSpectra_b,name,graphics_folder,eps_a,eps_b)
+        ploteado(New_Full_Spectra_a,Noise_a,New_Full_Spectra_b,Noise_b,FullSpectra_a,FullSpectra_b,name,graphics_folder,eps_a,eps_b)
         
     #else:
     #    continue
@@ -657,3 +667,10 @@ for CurrentSpec in files:
     plt.show()
     #plt.pause(1)
 '''
+f   = h5py.File(path+'.hdf5','r')
+filelist = sorted(list(f.keys()))
+f.close()
+if filelist[-1] == files[-1].split("/")[-1]:
+    print("Borrando")
+    #time.sleep(5)
+    #delete_folder(path)
