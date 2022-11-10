@@ -9,6 +9,7 @@ import h5py
 import math,time,os,sys,numpy
 import numpy as np 
 import argparse
+import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from scipy.signal import find_peaks_cwt
 from scipy.signal import find_peaks_cwt,medfilt,find_peaks
@@ -46,6 +47,9 @@ parser.add_argument('-lo',action='store',dest='lo_seleccionado',type=int,help='P
 ########################## GRAPHICS - RESULTS  ###################################################################################################
 parser.add_argument('-graphics_folder',action='store',dest='graphics_folder',help='Directorio de Resultados \
 					.Por defecto, se esta ingresando entre comillas /home/soporte/Pictures/', default='/home/soporte/Pictures/')
+parser.add_argument('-R',action='store',dest='reduccion',type=int,help='Parametro para obtener el valor del ruido SNR de los espectros filtrados \
+		            siendo 1 para espectros filtrados y 0 para espectros originales.', default=0)
+
 
 #Parsing the options of the script
 results	   = parser.parse_args()
@@ -56,12 +60,14 @@ code	   = int(results.code_seleccionado)
 Days	   = results.date_seleccionado
 lo		   = results.lo_seleccionado
 graphics_folder = results.graphics_folder
+R          = results.reduccion         
 
 if campaign == 1:
-    path = "/media/soporte/PROCDATA/CAMPAIGN/"
+    path = path+"CAMPAIGN/"
     nc = 600
 else:
-    path = "/media/soporte/PROCDATA/"
+    path=path
+    #path = "/media/soporte/PROCDATA/"
     nc = 100
 
 if freqs <3:
@@ -70,7 +76,7 @@ else:
     ngraph = 1
 
 from datetime import datetime
-days = datetime.strptime(Days, "%Y/%m/%d")
+days = datetime.strptime(Days,"%Y/%m/%d")
 day = days.strftime("%Y%j")
 print(day)
 
@@ -96,20 +102,56 @@ def whiten_spec(S):
     S=S.swapaxes(0,1)
     return(S)
 
-def GetRGBData(data_spc, threshv=1.5):
+def GetRGBData(data_spc, threshv=1):
     #This method if called overwrites the data image read from the HDF5
-    s=data_spc.transpose()
+    s = np.fft.fftshift(data_spc,axes=1)
+    s=s.transpose()
     L= s.shape[0] # Number of profiles
     N= s.shape[1] # Number of heights
     data_RGB = numpy.zeros([3,N])
     im=int(math.floor(L/2)) #50
     i0l=im - int(math.floor(L*threshv)) #10
     i0h=im + int(math.floor(L*threshv)) #90
+    print("i0l",i0l)
+    print("ihl",i0h)
 
     for ri in numpy.arange(N):
         data_RGB[0, ri]= numpy.sum(s[0:i0l,ri])
         data_RGB[1, ri]= numpy.sum(s[i0l:i0h,ri])
         data_RGB[2, ri]= numpy.sum(s[i0h:L,ri])
+    return data_RGB
+
+#Para datos filtrados
+def GetRGBData_filt(data_spc, threshv=0.167):
+    s = np.fft.fftshift(data_spc,axes=1)
+    s = s.transpose()
+    #s = data_spc.transpose()
+    L= s.shape[0] # Number of profiles
+    N= s.shape[1] # Number of heights
+#
+#    Freqs = np.linspace(-5,5,L)
+#    Ranges = np.linspace(0,1500,N)
+#    plt.figure(figsize=(10,6))
+#    plt.pcolormesh(Ranges, Freqs, np.log10(s), cmap='jet')
+    
+#    plt.colorbar()
+#    plt.xlabel("Frecuencia")
+#    plt.ylabel("Alturas")
+#    plt.show()
+#
+    data_RGB = numpy.zeros([3,N])
+    im=int(math.floor(L/2)) #Normal_mode:50 Campaign_mode:300
+    low_index = im - int(math.floor(L*0.25))
+    up_index  = im + int(math.floor(L*0.25))
+
+    lon = up_index-low_index
+    i0l = im - int(math.floor(lon*threshv))
+    i0h = im + int(math.floor(lon*threshv))
+    for ri in numpy.arange(N):
+        data_RGB[0, ri]= numpy.sum(s[low_index:i0l,ri])
+        data_RGB[1, ri]= numpy.sum(s[i0l:i0h,ri])
+        data_RGB[2, ri]= numpy.sum(s[i0h:up_index,ri])
+    
     return data_RGB
 
 def GetImageSNR(data_input):
@@ -189,15 +231,18 @@ SNR = hf.create_group("Data_SNR")
 DOPPLER = hf.create_group("Data_Doppler")
 UTIME = hf.create_group("utime")
 Channels = ['0','1']
+#print("TUPATH:",path)
 
 for chan in Channels:
     j=0
     for filename in sorted(os.listdir(path)):
         nsets=int(nc/nc) #600
         k=0
-        print(filename)
+        npeaks=5
+        #print(filename)
         for k in range(nsets):
             four= getDatavaluefromDirFilename(path=path,file=filename,value='pw'+str(chan)+'_C'+str(code)).swapaxes(0,1)
+            #four= getDatavaluefromDirFilename(path=path,file=filename,value='pw'+str(chan)+'_C'+str(code))
             pspec +=four[:,k*nc:(k+1)*nc]
         l = 0
         #print("PSPEC: ",pspec)
@@ -217,12 +262,14 @@ for chan in Channels:
         j=j+1
         prom_pspec= numpy.mean(new_pspec,1) #cambio a new_pspec
         noise = numpy.median(prom_pspec[0:200])
-        #print (prom_pspec.shape)
+        
         # ---------- CALCULO DEL RGB desde el pspec -------------------#
-        data_RGB     = GetRGBData(new_pspec, threshv=1.5)
+        #data_RGB     = GetRGBData(new_pspec, threshv=0.167)
+        data_RGB     = GetRGBData_filt(new_pspec, threshv=0.167)
         data_IMG_SNR = GetImageSNR(data_input= data_RGB).transpose()
         #-----------------------------------------------------
         i = 0
+
         for i in range(nrange):
             new_pspec[i,:] = new_pspec[i,:]-noise              #cambio a new_pspec
             pow_signal[i]= numpy.sum(new_pspec[i,:])/nc        #cambio a new_pspec
@@ -236,9 +283,11 @@ for chan in Channels:
         #print("PEAKS",peaks, peaks[0])
         #print(peaks)
         if len(peaks)<6:
+            npeaks = len(peaks)
             peaks=numpy.array(peaks)
             if len(peaks)==4:
-                peaks= numpy.append(peaks,peaks[3])
+                npeaks = 5
+                peaks= numpy.append(peaks,peaks[-1])
         else:
             peaks = numpy.array(peaks[1:npeaks+1]) # skip ground peak
         #print(len(peaks),peaks)
@@ -268,6 +317,7 @@ for chan in Channels:
             doppler_out = doppler.reshape(nrange,1)
 
         try:
+            print("npeaks",npeaks,"Valores",peaks)
             peaks_log=numpy.concatenate((peaks_log,peaks.reshape(npeaks,1)),axis=1)
         except NameError:
             peaks_log=peaks.reshape(npeaks,1)

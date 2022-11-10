@@ -303,7 +303,13 @@ for channel in Channels:
     agent2.New_LD[:10]
     #METODO FLOYD WARSHALL       
     #MODO DIA
-    d_f,d_r_f=floyd_warshall(G=d,G2=d_r,nV=len(d[0]))
+    try:
+        #print("D",d,"d_r",d_r)
+        print("LEN:",len(d[0]))
+        d_f,d_r_f=floyd_warshall(G=d,G2=d_r,nV=len(d[0]))
+    except:
+        print("ALERT: There's no signal in this channel.")
+        exit()
     fin=len(d_r_f[0])
     print("fin",fin)
     final=print_lindex(0,fin-1,d_r_f)
@@ -473,7 +479,7 @@ for channel in Channels:
 
     #print(list_noise)
     print(len(list_noise))
-    writeParameters
+ 
     print(station_type," **")
     directorio_crear = "/home/soporte/RTDI_%s/graphics_schain/%s/d%s/"%(station_type,identifier,Days)
     #directorio_crear = "/home/soporte/RTDI_A/graphics_schain/%s/d%s/"%(identifier,Days)

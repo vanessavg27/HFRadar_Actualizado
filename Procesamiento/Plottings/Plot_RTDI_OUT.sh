@@ -2,7 +2,7 @@
 
 #./Plot_RTDI_OUT.sh {path_spectra} {location} {mode_operation} {date}
 #Normal mode HYO  :    ./Plot_RTDI_OUT.sh "/media/soporte/PROCDATA/MomentsFloyd_Filt/" 21 1 "2022/08/29"
-#Campaign mode HYO:    ./Plot_RTDI_OUT.sh "/media/soporte/RAWDATA/HYOa/" 1 21 "2022/08/29"
+#Campaign mode HYO:    ./Plot_RTDI_OUT.sh "/media/soporte/RAWDATA/HYOa/" 21 0 "2022/08/29"
 
 
 #Modo normal
