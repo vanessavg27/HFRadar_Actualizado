@@ -113,12 +113,12 @@ def epsilon(data, vecinos = 10):
     
     if eps > 10.5:
         eps = 5
-        print("EPS EDITADO CON KNEED:",eps)
+        print("EPS EDITADO CON KNEED:",eps,end=" - ")
     elif eps<3:
         eps= 4.2
-        print("EPS EDITADO CON KNEED:",eps)
+        print("EPS EDITADO CON KNEED:",eps,end=" - ")
     else:
-        print("EPS CALCULADO CON KNEED:",eps)
+        print("EPS CALCULADO CON KNEED:",eps,end=" - ")
     return eps
 
 def freq_to_spec(freq):
@@ -161,14 +161,21 @@ def delete_bands(ancho,matrix):
 
     return NewFullSpectra
 
-def delete_folder(path):
-    print("")
-    print("FOLDER ELIMINADO:",path)
-    #shutil.rmtree("%s"%(path))
+def delete_folder(path,files):
+    #print("Funcion ",path+'.hdf5')
+    f   = h5py.File(path+'.hdf5','r')
+    filelist = sorted(list(f.keys()))
+    f.close()
+    
+    if filelist[-1] == files[-1].split("/")[-1][:-5]:
+        print("....Borrando")
+        print("")
+        print("    FOLDER ELIMINADO:",path)
+        shutil.rmtree("%s"%(path))
 
 def Guardado_reducted(path,pw_ch0,pw_ch1,noise_a,noise_b,min_a,min_b):
-    print("PATH GUARDADO: ",path)
     folder = path.split("/")[-2]
+    print("\n PATH GUARDADO: ",path)
     code = folder[2]
     name = path.split("/")[-1][:-5]
     path_o = path[:-30]
@@ -203,8 +210,8 @@ def Guardado_reducted(path,pw_ch0,pw_ch1,noise_a,noise_b,min_a,min_b):
         #g.create_dataset('image0_C%s'%(code),data= image0)
         #g.create_dataset('image1_C%s'%(code),data= image1)
     
-    print("Guardado hdf5: ",'%s.hdf5 - %s'%(folder,name))
-    print(" ")
+    print(" Guardado hdf5: ",'%s.hdf5 - %s'%(folder,name))
+    #print(" ")
 
 def Guardado_same(path, path_o, pw_ch0,pw_ch1,Noise_a,Noise_b,Noise_RGB_0,Noise_RGB_1):
     
@@ -351,12 +358,15 @@ parser.add_argument('-lo',action='store',dest='lo_seleccionado',type=int,help='P
 										  el segundo valor determina la orientacion N45O o N45E.  \
 										11: JRO-N450, 12: JRO-N45E \
 												21: HYO-N45O, 22: HYO-N45E', default=11)
-########################## GRAPHICS - RESULTS  ###################################################################################################
+########################## GRAPHICS - RESULTS ###################################################################################################
 parser.add_argument('-graphics_folder',action='store',dest='graphics_folder',help='Directorio de Resultados \
 					.Por defecto, se esta ingresando entre comillas /home/soporte/Pictures/', default='/home/soporte/Pictures/')
 
 parser.add_argument('-path_o',action='store',dest='path_out',help='Directorio de Datos \
 					.Por defecto, se esta ingresando entre comillas /media/soporte/PROCDATA/',default='/media/soporte/PROCDATA/')
+
+########################## DELETE SPECTRA FILES ###################################################################################################
+parser.add_argument('-del',action='store',dest='delete',type=int,help='Borrado de data espectral. Data sparse. Por defecto, se esta ingresando 0',default=0)
 #Parsing the options of the script
 results	   = parser.parse_args()
 path	   = str(results.path_lectura) #/media/igp-114/PROCDATA/
@@ -370,6 +380,7 @@ Days	   = results.date_seleccionado
 lo		   = results.lo_seleccionado
 reducted   = int(results.reducted)
 graphics_folder = results.graphics_folder
+deleted    = int(results.delete)
 
 if campaign == 1:
     path = path + "CAMPAIGN/"
@@ -401,32 +412,30 @@ print("Path:",path)
 #print("Path:",'%s.hdf5'%(path+folder))
 #print("Existe:",os.path.exists('%s.hdf5'%(path)))
 
+files = glob.glob(path+"/spec-*.hdf5")
+files.sort()
+print(folder)
+
+
 if os.path.exists('%s.hdf5'%(path)):
     os.system('rm -r %s.hdf5'%(path))
-
+    
 #------------------------------------------------------------------------------------------------------
 nrange=1000
 code = code
 freq = float("%se6"%(freqs))
 
-files = glob.glob(path+"/spec-*.hdf5")
-files.sort()
-print(folder)
-
 for CurrentSpec in files:
-    print("Archivo",CurrentSpec)
+    print("*Archivo",CurrentSpec)
     f = h5py.File(CurrentSpec,'r')
     name = CurrentSpec.split("/")[-1][5:-5]
     tiempo = str(datetime.fromtimestamp(int(name)))
-    print("NAME:",name," -- ",tiempo)
+    print(" TIME:",tiempo,end=" ")
     
     ch0 = np.array(f['pw0_C%s'%(code)])
     ch1 = np.array(f['pw1_C%s'%(code)])
-    print("FORMA:::",ch0.shape)
-    ## Ligero Filtrado 
-    #ch0 = light_fil(ch0.T).T
-    #ch1 = light_fil(ch1.T).T
-    ##
+    #print("FORMA:::",ch0.shape)
+
     Noise_a = Ruido(ch0,nc,nrange)
     Noise_b = Ruido(ch1,nc,nrange)
     
@@ -625,8 +634,8 @@ for CurrentSpec in files:
 
     if plot == 1:
         print("** PLOTEO **")
-        #New_Full_Spectra_a = csr_matrix((New_Full_Spectra_a,(f2_a,f1_a)),shape=(1000,nc))
-        #New_Full_Spectra_b = csr_matrix((New_Full_Spectra_b,(f2_b,f1_b)),shape=(1000,nc))
+        New_Full_Spectra_a = csr_matrix((New_Full_Spectra_a,(f2_a,f1_a)),shape=(1000,nc))
+        New_Full_Spectra_b = csr_matrix((New_Full_Spectra_b,(f2_b,f1_b)),shape=(1000,nc))
 
         ploteado(New_Full_Spectra_a,min_a,New_Full_Spectra_b,min_b,FullSpectra_a,FullSpectra_b,name,graphics_folder,eps_a,eps_b)
         ploteado(New_Full_Spectra_a,Noise_a,New_Full_Spectra_b,Noise_b,FullSpectra_a,FullSpectra_b,name,graphics_folder,eps_a,eps_b)
@@ -667,10 +676,6 @@ for CurrentSpec in files:
     plt.show()
     #plt.pause(1)
 '''
-f   = h5py.File(path+'.hdf5','r')
-filelist = sorted(list(f.keys()))
-f.close()
-if filelist[-1] == files[-1].split("/")[-1]:
+if deleted == 1:
     print("Borrando")
-    #time.sleep(5)
-    #delete_folder(path)
+    delete_folder(path,files)
