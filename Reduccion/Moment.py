@@ -1,17 +1,22 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Este codigo permite convetir espectros a momentos empleando filtro en alturas para
 reducir variabilidad en potencia, ademas se agrego funcionalidad para generar
 los archivos hdf5 automticamente uno despues de otro, tambien se corrigio el removerDC
 """
+#Forma de ejecucion para espectros normales
+#python3 Moment.py  -path "/media/soporte/DATA1/" -f 2.72216796875 -lo 41 -C 1 -code 0 -date "2022/08/30" -R 0 -graphics_folder "/media/soporte/PROCDATA/MERCED/MomentsFloyd/"
+#Forma de ejecucion para espectros reducidos
+#python3 Moment.py  -path "/media/soporte/DATA1/" -f 2.72216796875 -lo 41 -C 1 -code 0 -date "2022/08/30" -R 1 -graphics_folder "/media/soporte/PROCDATA/MERCED/MomentsFloyd/"
 
 import h5py
 import math,time,os,sys,numpy
 import matplotlib.pyplot as plt
 import numpy as np 
 import argparse
+import datetime
+import time
 from datetime import datetime, timedelta
-from scipy.signal import find_peaks_cwt
 from scipy.signal import find_peaks_cwt,medfilt,find_peaks
 from scipy.sparse import csr_matrix
 from scipy.signal import savgol_filter
@@ -48,9 +53,9 @@ parser.add_argument('-lo',action='store',dest='lo_seleccionado',type=int,help='P
 ########################## GRAPHICS - RESULTS  ###################################################################################################
 parser.add_argument('-graphics_folder',action='store',dest='graphics_folder',help='Directorio de Resultados \
 					.Por defecto, se esta ingresando entre comillas /media/soporte/PROCDATA/MomentsFloyd/', default="/media/soporte/PROCDATA/MomentsFloyd/")
+
 parser.add_argument('-R',action='store',dest='reduccion',type=int,help='Parametro para obtener el valor del ruido SNR de los espectros filtrados \
 		            siendo 1 para espectros filtrados y 0 para espectros originales.', default=0)
-
 
 #Parsing the options of the script
 results	   = parser.parse_args()
@@ -64,11 +69,12 @@ graphics_folder = results.graphics_folder
 R          = results.reduccion
 
 if R == 1:
-    graphics_folder = "/media/soporte/PROCDATA/MomentsFloyd_Filt/"
-
+    graphics_folder=graphics_folder[:-1]+"_Filt/"
+    print("Final Path: ",graphics_folder)
+ 
 if campaign == 1:
-    path = path+"CAMPAIGN/"
-    nc = 600
+    path= path+"CAMPAIGN/"
+    nc  = 600
 else:
     path = path
     nc = 100
@@ -83,9 +89,9 @@ days = datetime.strptime(Days,"%Y/%m/%d")
 day = days.strftime("%Y%j")
 print(day)
 
-################################################################
+###########################################################
 
-################################################################
+###########################################################
 
 def getDatavaluefromDirFilename(path,file,value):
     dir_file= path+"/"+file
@@ -114,6 +120,31 @@ def read_newdata(path,filename,nc,value):
     fp.close()
     return array
 
+def plot(snr,peaks,tiempo):
+
+    plt.plot(snr, label = 'original')
+    #plt.plot(peaks_newindex,)
+    plt.plot(peaks, snr[peaks], 'o', mfc= 'none', label = 'max')
+    #plt.plot(peaks, snr[peaks], 'o', mfc= 'none', label = 'ori')
+    plt.title(tiempo)
+    plt.show()
+
+def peaks_V2(snr,high_index):
+    prom  = np.mean(snr)
+    snr_2 = snr - prom
+    snr_2 = np.where(snr_2<=0.0, 0, snr_2)
+    index_peak  = [index for index,value in enumerate(snr_2) if value > prom]
+
+    for i in range(len(index_peak)-1):
+        for j in range(len(index_peak)-1):
+            if snr[index_peak[j+1]]>snr[index_peak[j]]:
+                val             = index_peak[j]
+                index_peak[j]   = index_peak[j+1]
+                index_peak[j+1] = val
+    #print("B:",b)
+    index_peak = [ n for n in index_peak if (n > high_index and n < 801)]
+    return index_peak
+
 def whiten_spec(S):
     S=S.swapaxes(0,1)
     n_rep=S.shape[0]
@@ -125,7 +156,7 @@ def whiten_spec(S):
     S=S.swapaxes(0,1)
     return(S)
 
-def GetRGBData(data_spc, threshv=0.25):
+def GetRGBData(data_spc, threshv=0.083):
     #This method if called overwrites the data image read from the HDF5
     #s
     s = np.fft.fftshift(data_spc,axes=1)
@@ -137,16 +168,17 @@ def GetRGBData(data_spc, threshv=0.25):
     i0l=im - int(math.floor(L*threshv)) #10
     i0h=im + int(math.floor(L*threshv)) #90
 #
-    Freqs = np.linspace(-5,5,L)
-    Ranges = np.linspace(0,1500,N)
-    plt.figure(figsize=(10,6))
-    plt.pcolormesh(Ranges, Freqs, np.log10(s), cmap='jet')
+#    Freqs = np.linspace(-5,5,L)
+#    Ranges = np.linspace(0,1500,N)
+#    plt.figure(figsize=(10,6))
+#    plt.pcolormesh(Ranges, Freqs, np.log10(s), cmap='jet')
     
-    plt.colorbar()
-    plt.xlabel("Frecuencia")
-    plt.ylabel("Alturas")
-    plt.show()
-#
+#    plt.colorbar()
+#    plt.xlabel("Frecuencia")
+#    plt.ylabel("Alturas")
+#    plt.show()
+
+
     for ri in numpy.arange(N):
         data_RGB[0, ri]= numpy.sum(s[0:i0l,ri])
         data_RGB[1, ri]= numpy.sum(s[i0l:i0h,ri])
@@ -162,7 +194,6 @@ def GetRGBData_filt(data_spc, threshv=0.167):
     L= s.shape[0] # Number of profiles
     N= s.shape[1] # Number of heights
 #
-
 #    Freqs = np.linspace(-5,5,L)
 #    Ranges = np.linspace(0,1500,N)
 #    plt.figure(figsize=(10,6))
@@ -172,7 +203,6 @@ def GetRGBData_filt(data_spc, threshv=0.167):
 #    plt.xlabel("Frecuencia")
 #    plt.ylabel("Alturas")
 #    plt.show()
-
 #
     data_RGB = numpy.zeros([3,N])
     im=int(math.floor(L/2)) #Normal_mode:50 Campaign_mode:300
@@ -211,7 +241,7 @@ def GetImageSNR(data_input):
 
     for j in range(npy):
         noise[j]/=ncount
-    #print("Noise RGB",noise)
+    #print("Noise RGB 10% ",noise)
     buffer2=numpy.zeros((1000,3),dtype='float')
     for i in range(r2+1):
         for j in range(npy):
@@ -251,7 +281,7 @@ new_pspec = numpy.zeros((nrange,nc))
 doppler    = numpy.empty(shape=(nrange))
 snr        = numpy.empty(shape=(nrange))
 pow_signal = numpy.empty(shape=(nrange))
-filelist   = sorted(os.listdir(path))
+
 if R == 1:
     try:
         f        = h5py.File(path+'.hdf5','r')
@@ -260,6 +290,8 @@ if R == 1:
     except OSError:
         print("    NO EXISTE EL ARCHIVO DE LECTURA:",path+'.hdf5')
         exit()
+else:
+    filelist   = sorted(os.listdir(path))
 
 ntime      = len(filelist)
 utime      = numpy.empty(shape=(ntime))
@@ -286,6 +318,8 @@ DOPPLER = hf.create_group("Data_Doppler")
 UTIME = hf.create_group("utime")
 Channels = ['0','1']
 i = 0
+from datetime import datetime
+
 for chan in Channels:
     j=0
     for filename in filelist:
@@ -293,35 +327,38 @@ for chan in Channels:
         k=0
         npeaks=5
         
-        for k in range(nsets):
-            if R ==1:
-                four  = read_newdata(path,filename,nc,value='pw'+str(chan)+'_C'+str(code)).swapaxes(0,1)    
-            else:
-                four  = getDatavaluefromDirFilename(path=path,file=filename,value='pw'+str(chan)+'_C'+str(code)).swapaxes(0,1)
-            
-            
-            pspec +=four[:,k*nc:(k+1)*nc]
-        l = 0
-        #print("PSPEC: ",pspec.shape)
-
-        new_pspec = pspec
-        from datetime import datetime
-        if R == 1:
+        if R ==1:
+            four  = read_newdata(path,filename,nc,value='pw'+str(chan)+'_C'+str(code)).swapaxes(0,1)
             utime[j] = read_newdata(path,filename,nc,value='t')
+            noise = read_newdata(path,filename,nc,'noise'+str(chan)+'_C'+str(code))
+            new_pspec = pspec = four
+            name = filename[5:]
+
         else:
+            four  = getDatavaluefromDirFilename(path=path,file=filename,value='pw'+str(chan)+'_C'+str(code)).swapaxes(0,1)
             utime[j]= getDatavaluefromDirFilename(path=path,file=filename,value='t')
+            new_pspec = pspec = four
+            
+            #Metodo de hallar el ruido
+            prom_pspec= numpy.mean(new_pspec,1) #cambio a new_pspec
+            noise = numpy.median(prom_pspec[0:200])
+            name = filename[5:-5]
+
+        
+        l = 0
+
         date = datetime.strptime(time.ctime(int(utime[j])),'%a %b %d %H:%M:%S %Y')
         t0 = date.hour+date.minute/60.0
         
-        j=j+1
-        prom_pspec= numpy.mean(new_pspec,1) #cambio a new_pspec
-        noise = numpy.median(prom_pspec[0:200])
-        #print (prom_pspec.shape)
+        #import datetime
+        tiempo= str(datetime.fromtimestamp(int(name)))
+
+        
 
         # ---------- CALCULO DEL RGB desde el pspec -------------------#
 
-        #data_RGB     = GetRGBData(new_pspec, threshv=0.25)
-        data_RGB     = GetRGBData_filt(new_pspec, threshv=0.167)
+        #data_RGB     = GetRGBData(new_pspec, threshv=0.083)
+        data_RGB      = GetRGBData_filt(new_pspec, threshv=0.083)
         #print("*** DATA-RGB",data_RGB)
         data_IMG_SNR = GetImageSNR(data_input= data_RGB).transpose()
         #data_IMG_SNR = GetRGBData_filt(data_input= data_RGB).transpose()
@@ -330,17 +367,23 @@ for chan in Channels:
         i = 0
 
         for i in range(nrange):
-            new_pspec[i,:] = new_pspec[i,:]-noise              #cambio a new_pspec
+            #print("aNTES DE RUIDO",new_pspec)
+            new_pspec[i,:] = new_pspec[i,:]-noise             #cambio a new_pspec
+            #print("DESPUES DE RUIDO",new_pspec)
             pow_signal[i]= numpy.sum(new_pspec[i,:])/nc        #cambio a new_pspec
-            power = numpy.sum(new_pspec[i,:])/nc               # AQUI DEBO DIVIDIR ENtre NC=600, cambio a new_pspec
+            power        = numpy.sum(new_pspec[i,:])/nc        # AQUI DEBO DIVIDIR ENtre NC=600, cambio a new_pspec
             #print freq
-            doppler[i] = numpy.sum(vmax*freq*new_pspec[i,:])/(power*100)    # 600 cambio a new_pspec
-            snr[i] = power/(noise)
+            doppler[i] = numpy.sum(vmax*freq*new_pspec[i,:])/(power*nc)    # 600 cambio a new_pspec
+            snr[i] = (power)/(noise)
 
         # find peaks
-        peaks = find_peaks_cwt(snr, numpy.arange(20,60))
+        #peaks = find_peaks_cwt(snr, numpy.arange(20,60))
+        peaks = peaks_V2(snr,50)
         #print("PEAKS",peaks, peaks[0])
-        #print(peaks)
+        if ( int(name) > 1661893300):
+            pass
+            #plot(snr,peaks,tiempo)
+            #print(peaks)
         if len(peaks)<6:
             #npeaks = len(peaks)
             peaks=numpy.array(peaks)
@@ -367,12 +410,16 @@ for chan in Channels:
                 npeaks = len(peaks)
 
         else:
-            peaks = numpy.array(peaks[1:npeaks+1]) # skip ground peak
+            peaks = numpy.array(peaks[:npeaks]) # skip ground peak
         #print(len(peaks),peaks)
-        #print("Peak-after: ",peaks, peaks[0], sep="***")
-        layer = peaks[0]
-        print(filename,folder,chan,j,layer,layer*1.5,doppler[layer])
-
+        if len(peaks) == 0:
+            peaks    =  numpy.empty((5))
+            peaks[:] =  numpy.nan
+            print(filename,folder,chan,j,"No hay datos espectrales SNR = Nan")
+        else:
+            layer = peaks[0]
+            print(filename,folder,chan,j,layer,layer*1.5,doppler[layer])
+        j=j+1
         # export
         try:
             power_out = numpy.concatenate((power_out,pow_signal.reshape(nrange,1)),axis=1)
