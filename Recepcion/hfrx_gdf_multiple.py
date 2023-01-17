@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # HF radar receiver
 #
@@ -14,7 +14,8 @@
 # higher dynamic range, often needed for continuous radar.
 #
 # (c) 2013 Juha Vierinen
-# 
+# Multiple frequencies 2022 Vanessa Vasquez
+ 
 from __future__ import division   #Libreria para obtener correctas divisiones
 from gnuradio import eng_notation
 from gnuradio import gr
@@ -267,20 +268,22 @@ class beacon_receiver:
         fg.start()
 
         #i = 0
+        isConfig = False
         while True:
         #while i < 16:
             #i += 1
-            tmp = u.get_mboard_sensor("ref_locked")
-	        #print("Test",tmp,"TEST")
-            if not(tmp.to_bool()):
-                print('NoLocked')
-                fg.stop()
-                exit(0)
+            if isConfig== False:
+               tmp = u.get_mboard_sensor("ref_locked")
+			#print("Test",tmp,"TEST")
+               if not(tmp.to_bool()):
+                  print('NoLocked')
+                  continue
+                  fg.stop()
+                  exit(0)
                 
-            print(u.get_mboard_sensor("ref_locked"))
-
-
-	        #print op.runtime
+            print(tmp)
+            isConfig= True
+        #print op.runtime
 
             if op.runtime != -1:
                 if time.time()-next_time > op.runtime:
@@ -484,14 +487,14 @@ if __name__ == '__main__':
 
     """
 
-    print("######### Vanessa NEWWW ###########")
+    print("######### PROGRAMA DE RECEPCION HF ###########")
     parser = OptionParser(option_class=eng_option, usage="%prog: [options]")
 
     parser.add_option("-a", "--address",
                       dest="ip",
                       type="string",
                       action="store",
-                      default="192.168.10.4",#CAMBIAR IP
+                      default="192.168.10.2",#CAMBIAR IP
                       help="Device address (ip number).")
 
     parser.add_option("-r", "--samplerate", dest="sample_rate", type="int",action="store",
