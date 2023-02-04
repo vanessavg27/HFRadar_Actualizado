@@ -7,8 +7,8 @@ cd /home/igp-114/TestReduccionDatos_Implementado/hfschain/schainroot/source/scha
 #The second parameter of this script is going to be any of the following strings: params, out, rtdi
 #That string is going to pass through to the send_SCP.py and set the paths to send the correct type of result
 #screen -S "ENVIO_WEB_PARAMS" -d -m ./sendResults_SCP.sh  0  1  2  /home/igp-114/Pictures/   $1    params
-screen -S "ENVIO_WEB_PARAMS" -d -m ./sendResults_SCP.sh  0  1  2  /home/soporte/Pictures/   $1    params
-
+#screen -S "ENVIO_WEB_PARAMS" -d -m ./sendResults_SCP.sh  0  1  2  /home/soporte/Pictures/   $1    params
+#./sendResults_SCP.sh  0  1  2  /home/soporte/Pictures/   $1    params
 COUNT=$(screen -list | grep -c "ENVIO_WEB_PARAMS")
 while [  $COUNT != "0" ]
 do
@@ -18,7 +18,8 @@ do
 done
 
 #screen -S "ENVIO_WEB_RTDI" -d -m ./sendResults_SCP.sh  0  1  2  /home/igp-114/   $1    rtdi
-screen -S "ENVIO_WEB_RTDI" -d -m ./sendResults_SCP.sh  0  1  2  /home/soporte/   $1    rtdi
+#screen -S "ENVIO_WEB_RTDI" -d -m ./sendResults_SCP.sh  0  1  2  /home/soporte/   $1    rtdi
+./sendResults_SCP.sh  0  1  2  /home/soporte/   $1    rtdi
 
 COUNT=$(screen -list | grep -c "ENVIO_WEB_RTDI")
 while [  $COUNT != "0" ]
@@ -29,7 +30,8 @@ do
 done
 
 #screen -S "ENVIO_WEB_OUT" -d -m ./sendResults_SCP.sh  0  1  2  /home/igp-114/   $1    out
-screen -S "ENVIO_WEB_OUT" -d -m ./sendResults_SCP.sh  0  1  2  /home/soporte/   $1    out
+#screen -S "ENVIO_WEB_OUT" -d -m ./sendResults_SCP.sh  0  1  2  /home/soporte/   $1    out
+./sendResults_SCP.sh  0  1  2  /home/soporte/   $1    out
 
 COUNT=$(screen -list | grep -c "ENVIO_WEB_OUT")
 while [  $COUNT != "0" ]
