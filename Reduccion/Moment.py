@@ -206,8 +206,8 @@ def GetRGBData_filt(data_spc, threshv=0.167):
 #
     data_RGB = numpy.zeros([3,N])
     im=int(math.floor(L/2)) #Normal_mode:50 Campaign_mode:300
-    low_index = im - int(math.floor(L*0.25))
-    up_index  = im + int(math.floor(L*0.25))
+    low_index = im - int(math.floor(L*0.167))
+    up_index  = im + int(math.floor(L*0.167))
 
     lon = up_index-low_index
     i0l = im - int(math.floor(lon*threshv))
@@ -358,12 +358,12 @@ for chan in Channels:
         # ---------- CALCULO DEL RGB desde el pspec -------------------#
 
         #data_RGB     = GetRGBData(new_pspec, threshv=0.083)
-        data_RGB      = GetRGBData_filt(new_pspec, threshv=0.083)
+        data_RGB      = GetRGBData_filt(new_pspec, threshv=0.167)
         #print("*** DATA-RGB",data_RGB)
         data_IMG_SNR = GetImageSNR(data_input= data_RGB).transpose()
         #data_IMG_SNR = GetRGBData_filt(data_input= data_RGB).transpose()
 
-        #-----------------------------------------------------
+        #---------------------------------------------------------------
         i = 0
 
         for i in range(nrange):
@@ -380,7 +380,7 @@ for chan in Channels:
         #peaks = find_peaks_cwt(snr, numpy.arange(20,60))
         peaks = peaks_V2(snr,50)
         #print("PEAKS",peaks, peaks[0])
-        if ( int(name) > 1661893300):
+        if ( int(name) > 1661821282):
             pass
             #plot(snr,peaks,tiempo)
             #print(peaks)

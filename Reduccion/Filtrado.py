@@ -16,11 +16,7 @@ import datetime
 import os,sys
 import h5py
 import gc
-from scipy.stats import median_absolute_deviation as MAD
 import warnings
-warnings.filterwarnings("ignore")
-from scipy.stats import wasserstein_distance as WassDistance
-from scipy.ndimage import gaussian_filter1d as gaussfilt
 from skimage.filters import  threshold_local
 from scipy import sparse
 import pandas as pd
@@ -32,14 +28,15 @@ from scipy.sparse import csr_matrix
 import argparse
 import glob
 import math,time,os,sys,shutil
+import _noise
 
-#Almacenar Ploteo 
-#./Filtrado.py -f 2.72 -code 0 -C 1 -date "2022/08/29" -P 1
+#Almacenar Ploteo de datos filtrados
+#./Filtrado.py -f 2.72 -code 0 -C 1 -date "2022/08/29" -P 1 
+#./Filtrado.py -f 2.72 -code 0 -C 1 -date "2022/08/29" -P 1 -graphics_folder "/home/soporte/Pictures/"
 
 #Almacenar matriz de potencias reducidas (data sparse)
 #./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -R 1
-#./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -R 1 -path '/media/soporte/RAWDATA/HYOa/'
-
+#./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -h 1 -R 1 -path '/media/soporte/RAWDATA/HYOa/'
 
 #Almacenar matriz de potencias filtrado (manteniendo la estructura)
 #./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -clean 1
@@ -61,8 +58,26 @@ def Ruido(input,nc,nrange):
             new_pspec[l]=four[l]
 
     prom_pspec= np.mean(new_pspec,1)
-    noise = np.median(prom_pspec[0:200])
+    noise = np.median(prom_pspec[0:200]) 
 
+    return noise
+
+def Ruido_v2(matrix_ch,nc,nrange):
+    
+    Freqs        = np.linspace(-5,5,nc)
+    Ranges       = np.linspace(0,1500,nrange)
+    indice_menor = int(nc/2)-int(math.floor(nc*0.1))
+    indice_mayor = int(nc/2)+int(math.floor(nc*0.1))
+    #print("indice_menor",indice_menor)
+    #print("indice_mayor",indice_mayor)
+    #Seccion de Matriz adecuada para la deteccion de Ruido
+    ruido_new    = (matrix_ch)[:201,indice_menor:indice_mayor]  
+    prom_pspec   = np.median(ruido_new)
+    return prom_pspec
+
+
+def hildebrand_sekhon(input,int_incoh):
+    noise = _noise.hildebrand_sekhon(input,int_incoh)
     return noise
 
 def Noise_RGB(data_spc,threshv=0.167):
@@ -121,6 +136,39 @@ def epsilon(data, vecinos = 10):
         print("EPS CALCULADO CON KNEED:",eps,end=" - ")
     return eps
 
+def DBSCAN_algorythm(matrix,FullSpectra,vecinos):
+    #Creacion de data sparse (Solo componentes != 0).
+    sparse_matrix      = sparse.csr_matrix(matrix).tocoo()
+    Frecuencia         = sparse_matrix.col
+    Rango              = sparse_matrix.row
+    #Colocacion de datos en DataFrame.
+    data               = pd.DataFrame()
+    data['Frecuencia'] = Frecuencia
+    data['Rango']      = Rango
+    X_pow              = data.values
+    #Hallar el epsilon de agrupaciones.
+    eps           = epsilon(X_pow, vecinos = vecinos)
+    #Ejecucion de DBSCAN.
+    db            = DBSCAN(eps=eps, min_samples = vecinos, metric= "euclidean").fit(X_pow)
+    clusters      = db.labels_
+    data['label'] = clusters
+    #Eliminación de etiquetas de ruido.
+    data          = data.drop(data[data['label'] == -1].index)
+    #Dataframe limpio
+    f1_a          = data['Frecuencia'].values
+    f2_a          = data['Rango'].values
+
+    New_Full_Spectra = []
+
+    for k in range(len(f1_a)):
+    
+        New_Full_Spectra.append(FullSpectra[f2_a[k]][f1_a[k]])
+    
+    New_Full_Spectra = np.array(New_Full_Spectra)
+    New_Full_Spectra = csr_matrix((New_Full_Spectra,(f2_a,f1_a)),shape=(1000,nc))
+    
+    return New_Full_Spectra
+
 def freq_to_spec(freq):
     pass
 
@@ -173,13 +221,12 @@ def delete_folder(path,files):
         print("    FOLDER ELIMINADO:",path)
         shutil.rmtree("%s"%(path))
 
-def Guardado_reducted(path,pw_ch0,pw_ch1,noise_a,noise_b,min_a,min_b):
+def Guardado_reducted(path,path_o,pw_ch0,pw_ch1,noise_a,noise_b):
     folder = path.split("/")[-2]
     print("\n PATH GUARDADO: ",path)
     code = folder[2]
     name = path.split("/")[-1][:-5]
-    path_o = path[:-30]
-    #day = 
+
 
     f = h5py.File(path,'r')
     #cspec01 = np.array(f['cspec01_C%s'%(code)])
@@ -190,18 +237,22 @@ def Guardado_reducted(path,pw_ch0,pw_ch1,noise_a,noise_b,min_a,min_b):
     tiempo = np.array(f['t'])
     f.close()
     #print("HOLI:",'%s.hdf5'%(path_o+folder))
-    
+    try:
+        os.makedirs(path_o)
+    except FileExistsError:
+            print("Archivo ya existente",path_o)
+
     with h5py.File('%s.hdf5'%(path_o+folder),'a') as f:
     #with h5py.File('d%s.hdf5'%(day),'a') as f:
 
         g = f.create_group('%s'%(name))
         g.create_dataset('pw0_C%s'%(code),data=pw_ch0)
         g.create_dataset('noise0_C%s'%(code),data=noise_a)
-        g.create_dataset('min0_C%s'%(code),data=min_a)
+        #g.create_dataset('min0_C%s'%(code),data=min_a)
 
         g.create_dataset('pw1_C%s'%(code),data=pw_ch1)
         g.create_dataset('noise1_C%s'%(code),data=noise_b)
-        g.create_dataset('min1_C%s'%(code),data=min_b)
+        #g.create_dataset('min1_C%s'%(code),data=min_b)
         g.create_dataset('t',data=tiempo)
 
         #g.create_dataset('cspec01_C%s'%(code),data= cspec01)
@@ -260,16 +311,22 @@ def Guardado_same(path, path_o, pw_ch0,pw_ch1,Noise_a,Noise_b,Noise_RGB_0,Noise_
             f.create_dataset('noiseRGB1_C%s'%(code),data = Noise_RGB_1)
             f.create_dataset('t',data=tiempo)
 
-def ploteado(New_Full_Spectra_a,min_a,New_Full_Spectra_b,min_b,FullSpectra_a,FullSpectra_b,name,graphics_folder, eps_a,eps_b):
+def ploteado(New_Full_Spectra_a,noise_a,New_Full_Spectra_b,noise_b,FullSpectra_a,FullSpectra_b,name,graphics_folder):
     import datetime
     tiempo = str(datetime.datetime.fromtimestamp(int(name)))
     print("Graphics_folder",graphics_folder)
+    ##
+    min_value_a =np.min(FullSpectra_a)
+    max_value_a = np.max(FullSpectra_a)
+    
+    min_value_b =np.min(FullSpectra_b)
+    max_value_b = np.max(FullSpectra_b)
+    ####
     FS_filtrado_A = New_Full_Spectra_a.toarray()
-    FS_filtrado_A[FS_filtrado_A == 0] = min_a
-
+    FS_filtrado_A[FS_filtrado_A == 0] = noise_a
 
     FS_filtrado_B = New_Full_Spectra_b.toarray()
-    FS_filtrado_B[FS_filtrado_B == 0] = min_b
+    FS_filtrado_B[FS_filtrado_B == 0] = noise_b
 
     #pw_ch0 = np.fft.ifftshift(FS_filtrado_A)
     #pw_ch1 = np.fft.ifftshift(FS_filtrado_B)
@@ -278,35 +335,44 @@ def ploteado(New_Full_Spectra_a,min_a,New_Full_Spectra_b,min_b,FullSpectra_a,Ful
     #pw_ch0 = np.fft.ifftshift(FS_filtrado_A.T,axes=0)
 
     pw_ch1 = spec_to_freq(FS_filtrado_B)
-    #pw_ch1 = np.fft.ifftshift(FS_filtrado_B.T,axes=0)
-    
+    #pw_ch1 = np.fft.ifftshift(FS_filtrado_B.T,axes=0)   
 
     plt.figure(figsize=(20,4))
     plt.subplot(1,4,1)
-    plt.pcolormesh(Freqs, Ranges, np.log10(FullSpectra_a), cmap='jet')
+    #plt.pcolor(Freqs, Ranges, np.log10(FullSpectra_a), cmap='jet',shading='auto')
+    plt.pcolormesh(Freqs, Ranges, np.log10(FullSpectra_a), cmap='jet', shading='auto',vmin=np.log10(min_value_a),vmax=np.log10(max_value_a))
     plt.colorbar()
     plt.xlabel("Frecuencia")
     plt.ylabel("Alturas")
+    plt.ylim((0,1500))
     plt.title("%s - %s"%(tiempo,"CH0-ori"))
       
     plt.subplot(1,4,2)
-    plt.pcolormesh(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch0,axes=0).T), cmap='jet')
+    #plt.pcolormesh(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch0,axes=0).T), cmap='jet')
+    plt.pcolormesh(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch0,axes=0).T), cmap='jet',vmin=np.log10(min_value_a),vmax=np.log10(max_value_a))
     plt.colorbar()
     plt.xlabel("Frecuencia")
     plt.ylabel("Alturas")
-    plt.title("%s - %s. EPS:%s"%(tiempo,"CH0-Filt",str(eps_a)))
+    plt.ylim((0,1500))
+    plt.title("%s - %s. "%(tiempo,"CH0-Filt"))
+    
     plt.subplot(1,4,3)
-    plt.pcolormesh(Freqs, Ranges, np.log10(FullSpectra_b), cmap='jet')
+    #plt.pcolor(Freqs, Ranges, np.log10(FullSpectra_b), cmap='jet',shading='auto')
+    plt.pcolormesh(Freqs, Ranges, np.log10(FullSpectra_b), cmap='jet',vmin=np.log10(min_value_b),vmax=np.log10(max_value_b))
     plt.colorbar()
     plt.xlabel("Frecuencia")
     plt.ylabel("Alturas")
+    plt.ylim((0,1500))
     plt.title("%s - %s"%(tiempo,"CH1-ori"))
+    
     plt.subplot(1,4,4)
-    plt.pcolormesh(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch1,axes=0).T), cmap='jet')
+    #plt.pcolor(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch1,axes=0).T), cmap='jet',shading='auto')
+    plt.pcolormesh(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch1,axes=0).T), cmap='jet',vmin=np.log10(min_value_b),vmax=np.log10(max_value_b))
     plt.colorbar()
     plt.xlabel("Frecuencia")
     plt.ylabel("Alturas")
-    plt.title("%s - %s. EPS:%s"%(tiempo,"CH1-Filt",str(eps_b)))
+    plt.ylim((0,1500))
+    plt.title("%s - %s. "%(tiempo,"CH1-Filt"))
     try:
         plt.savefig(fname=graphics_folder+name+".png",dpi=200)
     except:
@@ -318,10 +384,74 @@ def ploteado(New_Full_Spectra_a,min_a,New_Full_Spectra_b,min_b,FullSpectra_a,Ful
     plt.close()
 
 
-def lectura_matrix_sparse(file):
+def read_newdata(path,filename,nc,value):
+    dir_file = path+'.hdf5'
+    fp       = h5py.File(dir_file,'r')
+    dir_file = filename+'/'+value
+    #print("Filename:",filename)
+
+    if value[:2] == 'pw':        
+        matrix_read    = np.array(fp[dir_file])
+        power          = matrix_read[:,2] #Value power
+        f2             = matrix_read[:,1] #axis heights
+        f1             = matrix_read[:,0] #axis profiles
+
+        array = csr_matrix((power,(f2,f1)),shape= (nc,1000))
+        array = array.toarray()
+        array[array == 0] = read_newdata(path,filename,nc,'noise'+str(value[2])+'_C'+str(code))
+    else:
+        array = fp.get(dir_file)[()]
+    fp.close()
+    return array
     
-    
-    pass
+def plot_filtdata(path_o,folder,nc,code,graphics_folder):
+    import datetime
+    try:
+        f        = h5py.File(path_o+folder+'.hdf5','r')
+        filelist = sorted(list(f.keys()))
+        f.close()
+    except OSError:
+        print("    NO EXISTE EL ARCHIVO DE LECTURA:",path+'.hdf5')
+        exit()
+    nrange= 1000
+
+    for filename in filelist:
+        #print("FILENAME",filename)
+        tiempo = str(datetime.datetime.fromtimestamp(int(filename[5:])))
+        #print("FILENAME",time)
+        pwch0 = read_newdata(path_o+folder,filename,nc,value='pw'+str(0)+'_C'+str(code))
+        pwch1 = read_newdata(path_o+folder,filename,nc,value='pw'+str(1)+'_C'+str(code))
+
+        Freqs = np.linspace(-5,5,nc)
+        Ranges = np.linspace(0,1500,nrange)
+
+        FullSpectra_a = np.fft.fftshift(pwch0,axes=0).T
+        FullSpectra_b = np.fft.fftshift(pwch1,axes=0).T
+
+        plt.figure(figsize=(12,6))
+        plt.subplot(1,2,1)
+        plt.pcolormesh(Freqs, Ranges, np.log10(FullSpectra_a), cmap='jet')
+        plt.colorbar()
+        plt.xlabel("Frecuencia")
+        plt.ylabel("Alturas")
+        plt.title("%s - %s"%(tiempo,"CH0-filt"))
+
+        plt.subplot(1,2,2)
+        plt.pcolormesh(Freqs, Ranges, np.log10(FullSpectra_a), cmap='jet')
+        plt.colorbar()
+        plt.xlabel("Frecuencia")
+        plt.ylabel("Alturas")
+        plt.title("%s - %s"%(tiempo,"CH1-filt"))
+        #plt.show()
+        #try:
+        plt.savefig(fname=graphics_folder+filename+".png",dpi=200)
+        #except:
+        #    os.makedirs(graphics_folder)
+        #    print(" Directed %s created"%(graphics_folder))
+        #    plt.savefig(fname=graphics_folder+filename+".png",dpi=200)
+        
+        
+
 
 print ("*** Inicinado PROC - FILTRADO ***")
 path = os.path.split(os.getcwd())[0]
@@ -336,18 +466,25 @@ parser.add_argument('-path',action='store',dest='path_lectura',help='Directorio 
 					.Por defecto, se esta ingresando entre comillas /media/soporte/PROCDATA/',default='/media/soporte/PROCDATA/')
 ########################## FRECUENCIA ####################################################################################################
 parser.add_argument('-f',action='store',dest='f_freq',type=float,help='Frecuencia en Mhz 2.72 y 3.64. Por defecto, se esta ingresando 2.72 ',default=2.72216796875)
+########################## Ruido Hildebrand-seckon ####################################################################################################
+parser.add_argument('-h_s',action='store',dest='hild_sk',type=int,help='Obtener Ruido con Hildebrand_sekhon ',default=0)
 ########################## CAMPAIGN ### 600 o 100 perfiles ###############################################################################
 parser.add_argument('-C',action='store',dest='c_campaign',type=int,help='Campaign 1 (600 perfiles) y 0(100 perfiles). Por defecto, se esta ingresando 1',default=1)
 ########################## REDUCTED DATA ### 600 o 100 perfiles ###############################################################################
 parser.add_argument('-R',action='store',dest='reducted',type=int,help='Reduccion de almacenamiento. Data sparse. Por defecto, se esta ingresando 0',default=0)
 
 parser.add_argument('-clean',action='store',dest='clean',type=int,help='Almacenar matriz filtrada sin reducir. Por defecto, se esta ingresando 0',default=0)
-########################## PLOT DATA ### 600 o 100 perfiles ###############################################################################
-parser.add_argument('-P',action='store',dest='plot',type=int,help='Almacenamiento de data ploteada. Potencia original vs Potencia filtrada. Por defecto, se esta ingresando 0',default=0)
+########################## PLOT DATA COMPARED### 600 o 100 perfiles ###############################################################################
+#parser.add_argument('-P_c',action='store',dest='plot_c',type=int,help='Almacenamiento de comparacion de data ploteada. Potencia original vs Potencia filtrada.\
+#                    Por defecto, se esta ingresando 0',default=0)
+
+########################## PLOT DATA FILTRADA### 600 o 100 perfiles ###############################################################################
+parser.add_argument('-P',action='store',dest='plot',type=int,help='Almacenamiento de comparacion de data ploteada. Potencia original vs Potencia filtrada.\
+                    Por defecto, se esta ingresando 0',default=0)
 
 ########################## CODIGO - INPUT ################################################################################################
 parser.add_argument('-code',action='store',dest='code_seleccionado',type=int,help='Code de Tx para generar en estacion \
-										de Rx Spectro 0,1,2. Por defecto, se esta ingresando 0(Ancon)',default=0)
+					de Rx Spectro 0,1,2. Por defecto, se esta ingresando 0(Ancon)',default=0)
 ########################## DAY- SELECCION ################################################################################################
 parser.add_argument('-date',action='store',dest='date_seleccionado',help='Seleccionar fecha si es OFFLINE se ingresa \
 							la fecha con el dia deseado. Por defecto, considera el dia anterior',default=daybefore)
@@ -381,16 +518,19 @@ lo		   = results.lo_seleccionado
 reducted   = int(results.reducted)
 graphics_folder = results.graphics_folder
 deleted    = int(results.delete)
+hild_sk    = results.hild_sk
 
 if campaign == 1:
-    path = path + "CAMPAIGN/"
-    #path= "/home/soporte/Spectros/CAMPAIGN/"
-    path_o = path_o + "CAMPAIGN/"
-    nc = 600
+    path      = path + "CAMPAIGN/"
+    #path     = "/home/soporte/Spectros/CAMPAIGN/"
+    path_o    = path_o + "CAMPAIGN/"
+    nc        = 600
+    int_incoh = 6
 else:
-    path = path
-    path_o = path_o
-    nc = 100
+    path      = path
+    path_o    = path_o
+    nc        = 100
+    int_incoh = 1
 
 if freqs <3:
     ngraph = 0
@@ -406,7 +546,7 @@ day = days.strftime("%Y%j")
 folder = "sp%s1_f%s"%(code,ngraph)
 path     = path+"d"+day+'/'+folder
 graphics_folder = graphics_folder+"d"+day+'/'+folder+"/"
-path_o   = path_o+"d"+day+'/'+folder+'/'
+path_o   = path_o+"d"+day+'/'
 
 print("Path:",path)
 #print("Path:",'%s.hdf5'%(path+folder))
@@ -416,7 +556,11 @@ files = glob.glob(path+"/spec-*.hdf5")
 files.sort()
 print(folder)
 
-
+#if plot == 1:
+#    print("Plot - lectura de datos filtrados")
+#    #plot_filtdata(path_o,folder,nc,code,graphics_folder)
+#    print("Espectros filtrados en:",graphics_folder)
+    
 if os.path.exists('%s.hdf5'%(path)):
     os.system('rm -r %s.hdf5'%(path))
     
@@ -427,18 +571,30 @@ freq = float("%se6"%(freqs))
 
 for CurrentSpec in files:
     print("*Archivo",CurrentSpec)
-    f = h5py.File(CurrentSpec,'r')
+    try:
+        f = h5py.File(CurrentSpec,'r')
+    except OSError:
+        print("\nError en el espectro *.hdf5\n")
+        continue
+
     name = CurrentSpec.split("/")[-1][5:-5]
     tiempo = str(datetime.fromtimestamp(int(name)))
     print(" TIME:",tiempo,end=" ")
     
-    ch0 = np.array(f['pw0_C%s'%(code)])
-    ch1 = np.array(f['pw1_C%s'%(code)])
-    #print("FORMA:::",ch0.shape)
+    try:
+        ch0 = np.array(f['pw0_C%s'%(code)])
+    except KeyError:
+        print("Espectro vacio \n")
+        continue
 
-    Noise_a = Ruido(ch0,nc,nrange)
-    Noise_b = Ruido(ch1,nc,nrange)
-    
+    try:
+        ch1 = np.array(f['pw1_C%s'%(code)])
+    except KeyError:
+        print("Espectro vacio \n")
+        continue
+
+    print("FORMA ch0:::",ch0.shape)
+   
     NoiseRGB_a = Noise_RGB(ch0,0.25)
     NoiseRGB_b = Noise_RGB(ch1,0.25)
     #print("")
@@ -447,20 +603,56 @@ for CurrentSpec in files:
 
     FullSpectra_a = np.fft.fftshift(ch0,axes=0).T
     FullSpectra_b = np.fft.fftshift(ch1,axes=0).T
-
-    f.close()
-
+    #print("FullSpectra",FullSpectra_a.shape)
     Freqs = np.linspace(-5,5,nc)
     Ranges = np.linspace(0,1500,nrange)
-
-    #min_a = np.min(FullSpectra_a)
-    #min_b = np.min(FullSpectra_b)
     
-    NoiseFloor_a = np.median( FullSpectra_a, axis=0)
-    NoiseFloor_b = np.median( FullSpectra_b, axis=0)
-    #nc = 1000 alturas
+    ch0=light_fil(spec_to_freq(FullSpectra_a).T).T
+    ch1=light_fil(spec_to_freq(FullSpectra_b).T).T
 
+    FullSpectra_a = np.fft.fftshift(ch0,axes=0).T
+    FullSpectra_b = np.fft.fftshift(ch1,axes=0).T    
+
+    ruido_a    = np.delete(FullSpectra_a, range(100,850), axis=0)
+    ruido_b    = np.delete(FullSpectra_b, range(100,850), axis=0)
+    #print("Forma de ruido:",ruido_a.shape)
+    ruido_a_freq    = spec_to_freq(ruido_a)
+    ruido_b_freq    = spec_to_freq(ruido_b)
+    #print("Forma de ruido after:",ruido_a_freq.shape)
+
+    if hild_sk == 1:
+        print("\nRUIDO HILDEBRAND-SECKON\n")
+        #Noise_a = hildebrand_sekhon(np.sort(ch0),int_incoh)
+        Noise_a = hildebrand_sekhon(np.sort(ruido_a_freq),int_incoh)
+        #Noise_b = hildebrand_sekhon(np.sort(ch1),int_incoh)
+        Noise_b = hildebrand_sekhon(np.sort(ruido_b_freq),int_incoh)    
+    else:
+        print("RUIDO NORMAL")
+        Noise_a = Ruido_v2(ch0.T,nc,nrange)
+        Noise_b = Ruido_v2(ch1.T,nc,nrange)
+        print("Noise_a:",Noise_a,"Noise_b:",Noise_b,"\n")   
+
+    #NoiseFloor_a = np.median( FullSpectra_a, axis=0)
+    NoiseFloor_a = np.median( ruido_a, axis=0)
+    #print("NoiseFloor_a ",NoiseFloor_a.shape)
+    #NoiseFloor_b = np.median( FullSpectra_b, axis=0)
+    NoiseFloor_b = np.median( ruido_b, axis=0)
+    #print("NoiseFloor_b ",NoiseFloor_b.shape)
+    #nc = 1000 alturas
+    if nc == 100:
+        NoiseFloor_a = np.median( FullSpectra_a, axis=0)
+        NoiseFloor_b = np.median( FullSpectra_b, axis=0)
+        percentil    = 96
+        vecinos      = 15
+    else:
+        #Campaign Mode
+        percentil    = 90
+        vecinos      = 30
+
+        
+    f.close()
     aux_a =  np.reshape(NoiseFloor_a, (1,nc))
+    
     aux_b =  np.reshape(NoiseFloor_b, (1,nc))
 
     FullSpec_clean_a = np.log10(FullSpectra_a) - np.log10(aux_a)
@@ -469,15 +661,13 @@ for CurrentSpec in files:
     FullSpec_clean_b = np.log10(FullSpectra_b) - np.log10(aux_b)
     FullSpec_clean_b = np.where(FullSpec_clean_b<=0.0, 0, FullSpec_clean_b)
 
-    # Limpieza de bandas
-    FullSpec_clean_a = delete_bands(5,FullSpec_clean_a)
-    FullSpec_clean_b = delete_bands(5,FullSpec_clean_b)
+    # Limpieza de bandas *********************************************
+    #FullSpec_clean_a = delete_bands(6,FullSpec_clean_a) #ancho = 6 Hz
+    #FullSpec_clean_b = delete_bands(6,FullSpec_clean_b)
 
-    #### Uso del metodo estadìstico percentil 99 o 98
-    auxperc_a = np.percentile(FullSpec_clean_a, q=98, axis=(0,1))
-    auxperc_b = np.percentile(FullSpec_clean_b, q=98, axis=(0,1))
-    #print("AUX_PERC: ", auxperc_a)
-    #print("AUX_PERC: ", auxperc_b)
+    #### Uso del metodo estadìstico percentil 98 o 97
+    auxperc_a = np.percentile(FullSpec_clean_a, q=percentil, axis=(0,1))
+    auxperc_b = np.percentile(FullSpec_clean_b, q=percentil, axis=(0,1))
 
     Pot_a = (auxperc_a<=FullSpec_clean_a)*1
     Pot_b = (auxperc_b<=FullSpec_clean_b)*1
@@ -491,92 +681,21 @@ for CurrentSpec in files:
             if Pot_b[i][j] == 0:
                 #FullSpectra_b[i][j] = min_b
                 FullSpec_clean_b[i][j] = 0
-
-    #Creacion de la data de solo componentes de potencia canal 0 sin valores iguales a cero
-    sparse_matrix_a = sparse.csr_matrix(FullSpec_clean_a).tocoo()
-    #Creacion de la data de solo componentes de potencia canal 1 sin valores iguales a cero
-    sparse_matrix_b = sparse.csr_matrix(FullSpec_clean_b).tocoo()
+    try:
+        New_Full_Spectra_a = DBSCAN_algorythm(FullSpec_clean_a,FullSpectra_a,vecinos)
+    except ValueError:
+        print("Datos de matrix: NAN")
+        pass
     
-    ###Almacenando en un DataFrame para un facil manejo al eliminar etiquetas con ruido
-    #Creacion de la data de solo componentes de canal 0
-    Frecuencia_a = sparse_matrix_a.col
-    Rango_a = sparse_matrix_a.row
-    data_a = pd.DataFrame()
-    data_a['Frecuencia']=Frecuencia_a
-    data_a['Rango']=Rango_a
-    X_a = data_a.values
-
-    #Creacion de la data de solo componentes de canal 1
-    Frecuencia_b = sparse_matrix_b.col
-    Rango_b = sparse_matrix_b.row
-    data_b = pd.DataFrame()
-    data_b['Frecuencia']=Frecuencia_b
-    data_b['Rango']=Rango_b
-    X_b = data_b.values
-
-    eps_a = epsilon(X_a, vecinos = 10)
-    eps_b = epsilon(X_b, vecinos = 10)
-
-    db_a = DBSCAN(eps=eps_a, min_samples = 10, metric= "euclidean").fit(X_a)
-    cluster_a = db_a.labels_
-    data_a['label'] = cluster_a
+    try:
+        New_Full_Spectra_b = DBSCAN_algorythm(FullSpec_clean_b,FullSpectra_b,vecinos)
+    except ValueError:
+        print("Datos de matrix: NAN")
+        continue
     
-    db_b = DBSCAN(eps=eps_b, min_samples = 10, metric= "euclidean").fit(X_b)
-    cluster_b = db_b.labels_
-    data_b['label'] = cluster_b
-    
-    ### Eliminacion de ruido
-    data_a = data_a.drop(data_a[data_a['label'] == -1].index)
-    data_b = data_b.drop(data_b[data_b['label'] == -1].index)
-
-    # Dataframe "limpio"
-    f1_a = data_a['Frecuencia'].values
-    f2_a = data_a['Rango'].values
-
-    # Dataframe "limpio"
-    f1_b = data_b['Frecuencia'].values
-    f2_b = data_b['Rango'].values
-    #print("F1_b",type(f1_b),f2_b.shape)
-
-    New_Full_Spectra_a = []
-    New_Full_Spectra_b = []
-
-    ch0=light_fil(spec_to_freq(FullSpectra_a).T).T
-    ch1=light_fil(spec_to_freq(FullSpectra_b).T).T
-
-    FullSpectra_a = np.fft.fftshift(ch0,axes=0).T
-    FullSpectra_b = np.fft.fftshift(ch1,axes=0).T
-    #print("LAST FORM",FullSpectra_a.shape)
 
     min_a = np.min(FullSpectra_a)
     min_b = np.min(FullSpectra_b)
-
-    for k in range(len(f1_a)):
-    
-        New_Full_Spectra_a.append(FullSpectra_a[f2_a[k]][f1_a[k]])
-
-    New_Full_Spectra_a = np.array(New_Full_Spectra_a) 
-    #print("New_Full_Spectra_a",New_Full_Spectra_a)
-    
-    for k in range(len(f1_b)):
-
-        New_Full_Spectra_b.append(FullSpectra_b[f2_b[k]][f1_b[k]])
-
-    New_Full_Spectra_b = np.array(New_Full_Spectra_b)
-
-    ### Resultado de la matrix B sin ruido
-    New_Full_Spectra_a = csr_matrix((New_Full_Spectra_a,(f2_a,f1_a)),shape=(1000,nc))
-    #ncomp_a = New_Full_Spectra_a.tocoo()
-    #Pow_reduc_a = np.zeros((len(ncomp_a.col),3))
-    #Pow_reduc_a[:,0],Pow_reduc_a[:,1],Pow_reduc_a[:,2] = ncomp_a.col, ncomp_a.row, ncomp_a.data
-    #print("   Guardando ch0: ")
-
-    ### Resultado de la matrix A sin ruido
-    New_Full_Spectra_b = csr_matrix((New_Full_Spectra_b,(f2_b,f1_b)),shape=(1000,nc))
-    #ncomp_b = New_Full_Spectra_b.tocoo()
-    #Pow_reduc_b = np.zeros((len(ncomp_b.col),3))
-    #Pow_reduc_b[:,0],Pow_reduc_b[:,1],Pow_reduc_b[:,2] = ncomp_b.col, ncomp_b.row, ncomp_b.data
-    #print("   Guardando ch1: ")
 
     if reducted == 1:
         
@@ -597,35 +716,28 @@ for CurrentSpec in files:
         Pow_reduc_b[:,0],Pow_reduc_b[:,1],Pow_reduc_b[:,2] = ncomp_b.col, ncomp_b.row, ncomp_b.data
 
         #Guardado_reducted(CurrentSpec,Pow_reduc_a,Pow_reduc_b,Noise_a,Noise_b, min_a, min_b)
-        Guardado_reducted(CurrentSpec,Pow_reduc_a,Pow_reduc_b,Noise_a,Noise_b, min_a, min_b)
+        Guardado_reducted(CurrentSpec,path_o,Pow_reduc_a,Pow_reduc_b,Noise_a,Noise_b)
 
-        Noise_a
-        Noise_b
         del Spectra_a
         del Spectra_b
 
     if clean == 1:
-        #New_Full_Spectra_a = csr_matrix((New_Full_Spectra_a,(f2_a,f1_a)),shape=(1000,nc))
-
-
+        
         FS_filtrado_A = New_Full_Spectra_a.toarray()
-        #FS_filtrado_A[FS_filtrado_A == 0] = min_a
+        
         FS_filtrado_A[FS_filtrado_A == 0] = Noise_a   ### Agregado el reemplazo del min_a por  Noise_a
-        #pw_ch0 = np.fft.ifftshift(FS_filtrado_A.T,axes=0)
         pw_ch0 = spec_to_freq(FS_filtrado_A)
         ##
-
-        #New_Full_Spectra_b = csr_matrix((New_Full_Spectra_b,(f2_b,f1_b)),shape=(1000,nc))
-    
+           
         FS_filtrado_B = New_Full_Spectra_b.toarray()
-        #FS_filtrado_B[FS_filtrado_B == 0] = min_b
+        
         FS_filtrado_B[FS_filtrado_B == 0] = Noise_b   ### Agregado el reemplazo del min_b por  Noise_b
-        #pw_ch1 = np.fft.ifftshift(FS_filtrado_B.T,axes=0)
         pw_ch1 = spec_to_freq(FS_filtrado_B)
 
         print("CurrentSpec!",CurrentSpec)
-        print("PATH_O:",path_o)
-        Guardado_same(CurrentSpec, path_o, pw_ch0,pw_ch1,Noise_a,Noise_b,NoiseRGB_a,NoiseRGB_b)
+        path_out   = path_o+folder+'/'
+        print("PATH_O:",path_out)
+        Guardado_same(CurrentSpec, path_out, pw_ch0,pw_ch1,Noise_a,Noise_b,NoiseRGB_a,NoiseRGB_b)
 
 
         #Guardado_same(path, pw_ch0,pw_ch1,Noise_a,Noise_b)
@@ -633,49 +745,11 @@ for CurrentSpec in files:
         del FS_filtrado_B
 
     if plot == 1:
-        print("** PLOTEO **")
-        New_Full_Spectra_a = csr_matrix((New_Full_Spectra_a,(f2_a,f1_a)),shape=(1000,nc))
-        New_Full_Spectra_b = csr_matrix((New_Full_Spectra_b,(f2_b,f1_b)),shape=(1000,nc))
+        print("** PLOTEO DE COMPARACION**","nc:",nc)
 
-        ploteado(New_Full_Spectra_a,min_a,New_Full_Spectra_b,min_b,FullSpectra_a,FullSpectra_b,name,graphics_folder,eps_a,eps_b)
-        ploteado(New_Full_Spectra_a,Noise_a,New_Full_Spectra_b,Noise_b,FullSpectra_a,FullSpectra_b,name,graphics_folder,eps_a,eps_b)
-        
-    #else:
-    #    continue
-
-##### *** PARA PLOTEAR  *** #####
-'''   
-    FS_filtrado_A = New_Full_Spectra_a.toarray()
-    FS_filtrado_A[FS_filtrado_A == 0] = min_a
+        ploteado(New_Full_Spectra_a,Noise_a,New_Full_Spectra_b,Noise_b,FullSpectra_a,FullSpectra_b,name,graphics_folder)
 
 
-    FS_filtrado_B = New_Full_Spectra_b.toarray()
-    FS_filtrado_B[FS_filtrado_B == 0] = min_b
-
-    pw_ch0 = np.fft.ifftshift(FS_filtrado_A.T)
-    pw_ch1 = np.fft.ifftshift(FS_filtrado_B.T)
-
-    plt.figure(figsize=(20,4))
-    plt.subplot(1,4,1)
-    print("BEFORE PLOTEO,",FullSpectra_a.shape)
-    plt.pcolormesh(Freqs, Ranges, np.log10(FullSpectra_a), cmap='jet')
-    plt.colorbar()
-    plt.subplot(1,4,2)
-    plt.pcolormesh(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch0).T), cmap='jet')
-    plt.colorbar()
-    plt.subplot(1,4,3)
-    plt.pcolormesh(Freqs, Ranges, np.log10(FullSpectra_b), cmap='jet')
-    plt.colorbar()
-    plt.subplot(1,4,4)
-    plt.pcolormesh(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch1).T), cmap='jet')
-    plt.colorbar()
-
-    #plt.pcolormesh(Freqs, Ranges, np.log10(np.fft.fftshift(pw_ch1).T), cmap='jet')
-    #plt.colorbar()
-
-    plt.show()
-    #plt.pause(1)
-'''
 if deleted == 1:
     print("Borrando")
     delete_folder(path,files)
