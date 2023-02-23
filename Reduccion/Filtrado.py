@@ -36,7 +36,10 @@ import _noise
 
 #Almacenar matriz de potencias reducidas (data sparse)
 #./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -R 1
-#./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -h 1 -R 1 -path '/media/soporte/RAWDATA/HYOa/'
+#./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -h 0 -R 1 -path '/media/soporte/RAWDATA/HYOa/'
+
+#Reducir y ver plots
+#./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -R 1 -P 1
 
 #Almacenar matriz de potencias filtrado (manteniendo la estructura)
 #./Filtrado.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -clean 1
@@ -127,10 +130,10 @@ def epsilon(data, vecinos = 10):
     eps=distancias[knee.knee]
     
     if eps > 10.5:
-        eps = 5
+        eps = 6
         print("EPS EDITADO CON KNEED:",eps,end=" - ")
-    elif eps<3:
-        eps= 4.2
+    elif eps<4:
+        eps= 4.3
         print("EPS EDITADO CON KNEED:",eps,end=" - ")
     else:
         print("EPS CALCULADO CON KNEED:",eps,end=" - ")
@@ -192,6 +195,42 @@ def light_fil(data):
     del alturas
     del freqs
     return new_pspec
+
+def removeDC(FullSpectra,nc,nrange, mode=2):
+
+    jspectra  = FullSpectra.reshape(1,nc,nrange)
+    num_chan  = jspectra.shape[0]
+    num_hei   = jspectra.shape[2]
+    freq_dc   = int(jspectra.shape[1] / 2)
+    ind_vel   = np.array([-2, -1, 1, 2]) + freq_dc
+    ind_vel   = ind_vel.astype(int)
+
+    if ind_vel[0] < 0:
+        ind_vel[list(range(0, 1))] = ind_vel[list(range(0, 1))] + self.num_prof
+
+    if mode == 1:
+        jspectra[:, freq_dc, :] = (jspectra[:, ind_vel[1], :] + jspectra[:, ind_vel[2], :]) / 2  # CORRECCION
+
+    if mode == 2:
+        vel = np.array([-2, -1, 1, 2])
+        xx = np.zeros([4, 4])
+
+        for fil in range(4):
+            xx[fil, :] = vel[fil]**np.asarray(list(range(4)))
+
+        xx_inv = np.linalg.inv(xx)
+        xx_aux = xx_inv[0, :]
+
+        for ich in range(num_chan):
+            yy = jspectra[ich, ind_vel, :]
+            jspectra[ich, freq_dc, :] = np.dot(xx_aux, yy)
+            junkid = jspectra[ich, freq_dc, :] <= 0
+            cjunkid = sum(junkid)
+            if cjunkid.any():
+                jspectra[ich, freq_dc, junkid.nonzero()] = (jspectra[ich, ind_vel[1], junkid] + jspectra[ich, ind_vel[2], junkid]) / 2
+
+    return jspectra[0]
+
 
 
 def delete_bands(ancho,matrix):
@@ -502,6 +541,9 @@ parser.add_argument('-graphics_folder',action='store',dest='graphics_folder',hel
 parser.add_argument('-path_o',action='store',dest='path_out',help='Directorio de Datos \
 					.Por defecto, se esta ingresando entre comillas /media/soporte/PROCDATA/',default='/media/soporte/PROCDATA/')
 
+##########################  REMOVE DC ############################################################################################################
+parser.add_argument('-dc',action='store',dest='remove_dc',help='Argumento para eliminar la señal DC \
+		             de un espectro',default=0)
 ########################## DELETE SPECTRA FILES ###################################################################################################
 parser.add_argument('-del',action='store',dest='delete',type=int,help='Borrado de data espectral. Data sparse. Por defecto, se esta ingresando 0',default=0)
 #Parsing the options of the script
@@ -514,11 +556,12 @@ clean      = results.clean
 plot       = results.plot
 code	   = int(results.code_seleccionado)
 Days	   = results.date_seleccionado
-lo		   = results.lo_seleccionado
+lo		   = str(results.lo_seleccionado)
 reducted   = int(results.reducted)
 graphics_folder = results.graphics_folder
 deleted    = int(results.delete)
 hild_sk    = results.hild_sk
+remove_dc  = int(results.remove_dc)
 
 if campaign == 1:
     path      = path + "CAMPAIGN/"
@@ -607,6 +650,11 @@ for CurrentSpec in files:
     Freqs = np.linspace(-5,5,nc)
     Ranges = np.linspace(0,1500,nrange)
     
+    #if lo == '21' or lo == '22':
+    if remove_dc == 1:
+        FullSpectra_a = removeDC(FullSpectra_a.T,nc,nrange, mode=2).T
+        FullSpectra_b = removeDC(FullSpectra_b.T,nc,nrange, mode=2).T
+
     ch0=light_fil(spec_to_freq(FullSpectra_a).T).T
     ch1=light_fil(spec_to_freq(FullSpectra_b).T).T
 
@@ -637,17 +685,37 @@ for CurrentSpec in files:
     #print("NoiseFloor_a ",NoiseFloor_a.shape)
     #NoiseFloor_b = np.median( FullSpectra_b, axis=0)
     NoiseFloor_b = np.median( ruido_b, axis=0)
-    #print("NoiseFloor_b ",NoiseFloor_b.shape)
-    #nc = 1000 alturas
+
+    #'Campaign':[percentil o porcentaje,vecinos] #porcentaje es IP a vecinos
+    location = {'11':{'Campaign':{'ch0':[86,38],'ch1':[86,38]},'Normal':{'ch0':[92,15],'ch1':[93,16]}}, #JROA Good
+                '12':{'Campaign':{'ch0':[86,38],'ch1':[86,38]},'Normal':{'ch0':[92,15],'ch1':[93,16]}}, #JROB Good
+                '21':{'Campaign':{'ch0':[86,38],'ch1':[86,38]},'Normal':{'ch0':[91,30],'ch1':[95,18]}}, #HYOA Good
+                '22':{'Campaign':{'ch0':[86,38],'ch1':[86,38]},'Normal':{'ch0':[92,28],'ch1':[95,18]}}, #HYOB
+                '31':{'Campaign':[86,38],'Normal':[92,15]}, #Mala
+                '41':{'Campaign':{'ch0':[88,38],'ch1':[86,38]},'Normal':{'ch0':[92,20],'ch1':[94,20]}}, #Merced
+                '51':{'Campaign':{'ch0':[87,36],'ch1':[86,38]},'Normal':{'ch0':[93,19],'ch1':[95,18]}}, #Barranca Good
+                '61':{'Campaign':[86,38],'Normal':[92,15]}, #Oroya                                       
+                 }
+    
+
     if nc == 100:
         NoiseFloor_a = np.median( FullSpectra_a, axis=0)
         NoiseFloor_b = np.median( FullSpectra_b, axis=0)
-        percentil    = 96
-        vecinos      = 15
+        #Porcentaje o percentil en Modo Normal
+        percentil_a  = location[lo]['Normal']['ch0'][0]
+        percentil_b  = location[lo]['Normal']['ch1'][0]
+        #Vecinos del algorimo DBSCAN
+        vecinos_a      = location[lo]['Normal']['ch0'][1]
+        vecinos_b      = location[lo]['Normal']['ch1'][1]
     else:
         #Campaign Mode
-        percentil    = 90
-        vecinos      = 30
+        #NoiseFloor_a = np.median( FullSpectra_a, axis=0)
+        #NoiseFloor_b = np.median( FullSpectra_b, axis=0)
+        percentil_a  = location[lo]['Campaign']['ch0'][0]
+        percentil_b  = location[lo]['Campaign']['ch1'][0]
+        #Vecinos del algorimo DBSCAN
+        vecinos_a      = location[lo]['Campaign']['ch0'][1]
+        vecinos_b      = location[lo]['Campaign']['ch1'][1]
 
         
     f.close()
@@ -666,8 +734,8 @@ for CurrentSpec in files:
     #FullSpec_clean_b = delete_bands(6,FullSpec_clean_b)
 
     #### Uso del metodo estadìstico percentil 98 o 97
-    auxperc_a = np.percentile(FullSpec_clean_a, q=percentil, axis=(0,1))
-    auxperc_b = np.percentile(FullSpec_clean_b, q=percentil, axis=(0,1))
+    auxperc_a = np.percentile(FullSpec_clean_a, q=percentil_a, axis=(0,1))
+    auxperc_b = np.percentile(FullSpec_clean_b, q=percentil_b, axis=(0,1))
 
     Pot_a = (auxperc_a<=FullSpec_clean_a)*1
     Pot_b = (auxperc_b<=FullSpec_clean_b)*1
@@ -682,13 +750,13 @@ for CurrentSpec in files:
                 #FullSpectra_b[i][j] = min_b
                 FullSpec_clean_b[i][j] = 0
     try:
-        New_Full_Spectra_a = DBSCAN_algorythm(FullSpec_clean_a,FullSpectra_a,vecinos)
+        New_Full_Spectra_a = DBSCAN_algorythm(FullSpec_clean_a,FullSpectra_a,vecinos_a)
     except ValueError:
         print("Datos de matrix: NAN")
         pass
     
     try:
-        New_Full_Spectra_b = DBSCAN_algorythm(FullSpec_clean_b,FullSpectra_b,vecinos)
+        New_Full_Spectra_b = DBSCAN_algorythm(FullSpec_clean_b,FullSpectra_b,vecinos_b)
     except ValueError:
         print("Datos de matrix: NAN")
         continue
