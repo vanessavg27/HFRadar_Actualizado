@@ -102,6 +102,7 @@ def whiten_spec(S):
     S=S.swapaxes(0,1)
     return(S)
 
+
 def GetRGBData(data_spc, threshv=1):
     #This method if called overwrites the data image read from the HDF5
     s = np.fft.fftshift(data_spc,axes=1)
@@ -282,6 +283,7 @@ for chan in Channels:
         peaks = find_peaks_cwt(snr, numpy.arange(20,60))
         #print("PEAKS",peaks, peaks[0])
         #print(peaks)
+
         if len(peaks)<6:
             npeaks = len(peaks)
             peaks=numpy.array(peaks)
@@ -293,7 +295,7 @@ for chan in Channels:
         #print(len(peaks),peaks)
         #print("Peak-after: ",peaks, peaks[0], sep="***")
         layer = peaks[0]
-        print(filename,folder,chan,j,layer,layer*1.5,doppler[layer])
+        print(filename,folder,chan,j,"Indice del pico:",layer,"Valor del pico:",layer*1.5,"Doppler del pico:",doppler[layer])
 
         # export
         try:

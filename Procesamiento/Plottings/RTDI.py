@@ -5,7 +5,7 @@ import matplotlib.ticker as mticker
 from matplotlib.pyplot import imshow
 import h5py,math
 import time, os, sys, numpy
-import numpy as np 
+import numpy as np
 import argparse
 from datetime import datetime, timedelta
 from scipy.signal import find_peaks_cwt
@@ -92,6 +92,22 @@ def bubbleSort(alist):
                 temp=alist[i]
                 alist[i]=alist[i+1]
                 alist[i+1]=temp
+
+def peaks_V2(snr,high_index):   #Funcion mejorada de detección de picos
+    prom  = np.mean(snr)
+    snr_2 = snr - prom
+    snr_2 = np.where(snr_2<=0.0, 0, snr_2)
+    index_peak  = [index for index,value in enumerate(snr_2) if value > prom]
+
+    for i in range(len(index_peak)-1):  #Ordenamiento segun el mayor pico al menor pico
+        for j in range(len(index_peak)-1):
+            if snr[index_peak[j+1]]>snr[index_peak[j]]:
+                val             = index_peak[j]
+                index_peak[j]   = index_peak[j+1]
+                index_peak[j+1] = val
+    #print("B:",b)
+    index_peak = [ n for n in index_peak if (n > high_index and n < 450)]
+    return index_peak
                 
 
 import datetime, time, math
@@ -122,7 +138,7 @@ for channel in Channels:
     # 1000,1440,3 spc_db
     #spc_db = numpy.empty((RGB.shape(2),RGB.shape(0),RGB.shape(1))
     spc_db = numpy.empty((1000,1440,3))
-    utime_minute     =  [datetime.datetime.fromtimestamp(x) for x in utime ]
+    utime_minute     =  [datetime.datetime.fromtimestamp(x) for x in utime]
     minute = [int(x.hour*60 + x.minute + x.second/60.0) for x in utime_minute]
     xmin = 0
     xmax = 24
@@ -156,20 +172,30 @@ for channel in Channels:
         print("Perfiles %s - %s -Ch%s"%(i,utime_minute[i],channel))
         for j in range(1000):
             profile[j]= RGB[i][0][j]+RGB[i][1][j] + RGB[i][2][j]
-        #if i <= 480 or i >=960:
+        
         max_deriv=0
+        try:
+            layer1 = peaks_V2(profile,133)[0]
+        except IndexError:
+            print("No se encontro picos")
+                
         for k in range(1000):
-            if (rango[k]>=200.0 and rango[k]<450.0):
+            if (rango[k]>=150.0 and rango[k]<450.0):
                 deriv=(-2.0*profile[k-2]-profile[k-1]+profile[k+1]+2.0*profile[k+2])/10.0 #10.04
                 if (deriv>max_deriv):
                     max_deriv=deriv
                     layer1=k
+        #print("layer1 antes: ",layer1,layer1*1.5)            
         queue1[icount1]=layer1
         m=7
+        print("QUEUE:",queue1)
         for l in range(7):
             tmp[l]=queue1[l]
+        
         bubbleSort(tmp)
-        layer1=tmp[int(m/2)] # this has a value from sorting 7 values.
+        print("TMP:",tmp)
+        print()
+        layer1=tmp[int(m/2)] # this has a value from sorting 7 values.   
         icount1=(icount1+1)%m
         data_img_genaro.append(rango[layer1])# how to know that is value is also int? from 0 to 1000?
 
