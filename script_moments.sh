@@ -27,16 +27,17 @@ then
 ####################### REDUCE SPEC-DATA ##########################
 cd $HOME/Actualizado/Reduccion/
 echo "Starting Reduction!"
-#ruta_especreduced="/media/soporte/PROCDATA/"
-ruta_especreduced="/media/soporte/PROCDATA/MERCED/"
-echo "./Filtrado.sh" $ruta_procdata $2 $date_to_process $ruta_especreduced
-./Filtrado.sh $ruta_procdata $2 $date_to_process $ruta_especreduced
+ruta_especreduced="/media/soporte/PROCDATA/"
+#ruta_especreduced="/media/soporte/PROCDATA/MERCED/"
+
+echo "./Reduccion_total.sh"
+./Reduccion_total.sh $date_to_process
 
 sleep 5
 ############ Variables ############
 reduct=1
-ruta_moments="/media/soporte/PROCDATA/MERCED/MomentsFloyd_Filt/"
-
+ruta_moments="/media/soporte/PROCDATA/MomentsFloyd_Filt/"
+cd $HOME/Actualizado/Procesamiento/Plottings/
 else
 ############ Variables ############
 reduct=0
@@ -79,8 +80,8 @@ done
 ###################Plotting RTDI#################################################3
 
 echo "Plotting the new RTDI from moments"
-#screen -S "PLOT_RTDI" -d -m 
-./PLOT_RTDI.sh $ruta_moments $1 $2 $date_to_process
+#screen -S "PLOT_RTDI_OUT" -d -m 
+./Plot_RTDI_OUT.sh $ruta_moments $1 $2 $date_to_process
 
 sleep 1
 COUNT=$(screen -list | grep -c "PLOT_RTDI")
