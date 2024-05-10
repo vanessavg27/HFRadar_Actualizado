@@ -290,44 +290,7 @@ class beacon_receiver:
                     print("PARADA")
                     fg.stop()
                     exit(0)
-        #    if filesink_0.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_1.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_2.get_overflow() > 0:
-        #        print "Overflow detected. Stopping\n"
-        #        exit(0)
-        #    if filesink_3.get_overflow() > 0:
-        #        print "Overflow detected. Stopping\n"
-        #        exit(0)
-        #    if filesink_4.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_5.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_6.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_7.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_8.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_9.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_10.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-        #    if filesink_11.get_overflow() > 0:
-        #        print("Overflow detected. Stopping\n")
-        #        exit(0)
-
-            #print("Testing Bucle ...")
+        
 
             """ Here add code for detection of a new day """
 

@@ -14,7 +14,6 @@ from scipy.sparse import csr_matrix
 import argparse
 import glob
 import math,shutil
-import _noise
 from colorama import Fore, Back, Style
 
 class Reduccion():
@@ -40,6 +39,7 @@ class Reduccion():
         self.plot            = op.plot
         self.nrange          = 1000
         self.old             = op.old
+        self.spec_cont       = 0 
         ################ DATAFRAME CON COORDENADAS
         
 
@@ -57,7 +57,7 @@ class Reduccion():
             self.path_o    = self.path_o
             self.mode      = 'Normal'
             self.int_incoh = 6
-            self.pad       = 4
+            self.pad       = 6
             self.separacion= 10
 
         if self.freqs < 3:
@@ -68,7 +68,7 @@ class Reduccion():
         self.rx = {'11':"JRO-A",'12':"JRO-B",'21':"HYO-A",'22':"HYO-B",'31':"MALA",'41':"MERCED",'51':"BARRANCA",'61':"LA OROYA"}
         self.tx = {'0':'Ancon','1':'Sicaya','2':'Ica'}
 
-        print("*** Iniciando PROC - FILTRADO Y REDUCCION***")
+        print("*** Iniciando PROC - FILTRADO Y REDUCCION ***")
         print("      Estacion Rx:        ",self.rx[self.lo])
         print("      Estacion Tx:        ",self.tx[str(self.code)])
         print("      Modo de Operación:  ",self.mode)
@@ -77,12 +77,8 @@ class Reduccion():
 
         if self.old == 1:
             print("      Misma banda de frecuencia")
-            print("      Porcentaje ch0:     ",self.samefreqs(self.lo,self.mode,str(self.freqs),'ch0',0,self.code))
-            print("      Porcentaje ch1:     ",self.samefreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code))
         else:
-            print("Multifrecuencia")
-            print("      Porcentaje ch0:     ",self.multifreqs(self.lo,self.mode,str(self.freqs),'ch0',0,self.code))
-            print("      Porcentaje ch1:     ",self.multifreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code))
+            print("      Multifrecuencia")
 
         days   = datetime.datetime.strptime(self.Days, "%Y/%m/%d")
         day    =  days.strftime("%Y%j")
@@ -103,22 +99,27 @@ class Reduccion():
         path                 = self.path+"d"+day+'/'+folder
         self.graphics_folder = self.graphics_folder+"d"+day+'/'+folder+"/"
         self.path_o          = self.path_o+"d"+day+'/'
-
+        print("files:",path+"/spec-*.hdf5")
         files                = glob.glob(path+"/spec-*.hdf5")
         files.sort()
         print("      **",folder)
         
         archivos = [x for x in files if (datetime.datetime.fromtimestamp(int(x.split("/")[-1][5:-5])).strftime("%H:%M:%S") >= self.start_h and datetime.datetime.fromtimestamp(int(x.split("/")[-1][5:-5])).strftime("%H:%M:%S") <= self.end_h)]
-
+        
         if archivos == [] or len(archivos) == 1:
-            print(Fore.RED+"No hay archivos en ese rango de horas")
-            return 0
+            print(Fore.RED+"No hay archivos en ese rango de horas en el folder:")
+            print("    %s"%(self.path))
+            sys.exit()
         
         return archivos
 
     def clean_run(self):
+        tiempo_0 = 0
+        sum_spec_a = np.zeros((self.nc,self.nrange))
+        sum_spec_b = np.zeros((self.nc,self.nrange))
 
         for CurrentSpec in self.h5_list(self.code,self.ngraph):
+            
             print("  **Archivo:",CurrentSpec)
             try:
                 ch0 = self.read_h5(CurrentSpec,0)
@@ -149,6 +150,8 @@ class Reduccion():
 
             NoiseFloor_a = np.median( ruido_a, axis=0)
             NoiseFloor_b = np.median( ruido_b, axis=0)
+            
+            self.power_correction(FullSpectra_a,FullSpectra_b)
 
             if self.nc == 100:
                 #Normal mode
@@ -157,14 +160,17 @@ class Reduccion():
                 
                 if self.old == 1:
                     #Same frequencies
-                    percentil_a  = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch0',0,self.code)
-                    percentil_b  = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code)                
+                    #percentil_a  = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch0',0,self.code)
+                    #percentil_b  = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code) 
+
+                    percentil_a  = self.valor_porcentaje_a
+                    percentil_b  = self.valor_porcentaje_b 
                     vecinos_a    = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch0',1,self.code)
                     vecinos_b    = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch1',1,self.code)
                 else:
                     #Multifrequencies
-                    percentil_a  = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch0',0,self.code)
-                    percentil_b  = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code)
+                    percentil_a  = self.valor_porcentaje_a
+                    percentil_b  = self.valor_porcentaje_b
                     vecinos_a    = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch0',1,self.code)
                     vecinos_b    = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch1',1,self.code)
 
@@ -172,14 +178,18 @@ class Reduccion():
                 #Campaign Mode
                 if self.old == 1:
                     #Same frequencies
-                    percentil_a  = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch0',0,self.code)
-                    percentil_b  = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code)               
+                    #percentil_a  = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch0',0,self.code)
+                    #percentil_b  = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code)
+                    percentil_a  = self.valor_porcentaje_a
+                    percentil_b  = self.valor_porcentaje_b             
                     vecinos_a    = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch0',1,self.code)
                     vecinos_b    = self.samefreqs(self.lo,self.mode,str(self.freqs),'ch1',1,self.code)
                 else:
                     #Multifrequencies
-                    percentil_a  = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code)
-                    percentil_b  = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code)
+                    #percentil_a  = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch0',0,self.code)
+                    #percentil_b  = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch1',0,self.code)
+                    percentil_a  = self.valor_porcentaje_a
+                    percentil_b  = self.valor_porcentaje_b 
                     vecinos_a    = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch0',1,self.code)
                     vecinos_b    = self.multifreqs(self.lo,self.mode,str(self.freqs),'ch1',1,self.code)
 
@@ -230,7 +240,7 @@ class Reduccion():
 
 #           ######################## PROGRAMAR NUEVO RUIDO ###############
             
-            Noisegeneral_b = self.Ruido_oficial(ch0,self.nrange)
+            Noisegeneral_b = self.Ruido_oficial(ch1,self.nrange)
 #           ##############################################################
 
             if self.reducted == 1:
@@ -261,6 +271,60 @@ class Reduccion():
 
                 self.ploteado(New_Full_Spectra_a,Noisegeneral_a,New_Full_Spectra_b,Noisegeneral_b,FullSpectra_a,FullSpectra_b,self.name,self.graphics_folder)
     
+    def power_correction(self,FullSpectra_a,FullSpectra_b):
+        
+        sensitivity_a = [1]
+        sensitivity_b = [1.5]
+        
+        total_a = np.sum(FullSpectra_a)/len(FullSpectra_a)
+        total_b = np.sum(FullSpectra_b)/len(FullSpectra_b)
+        total_log_a = np.log10(total_a)
+        total_log_b = np.log10(total_b)
+
+        prom_spec_a = np.sort(np.log10(FullSpectra_a),axis=None)
+        prom_spec_b = np.sort(np.log10(FullSpectra_b),axis=None)
+
+        x_a = range(len(prom_spec_a))
+        x_b = range(len(prom_spec_b))
+
+        knees_a = []
+        knees_b = []
+
+        for s in sensitivity_a:
+            kl_a = KneeLocator(x_a, prom_spec_a, curve="convex", direction="increasing", S=s)
+            knees_a.append(kl_a.knee)
+
+        for s in sensitivity_b:  
+            kl_b = KneeLocator(x_b, prom_spec_b, curve="convex", direction="increasing", S=s)
+            knees_b.append(kl_b.knee)
+
+        knees_a.sort()   
+        knees_b.sort()
+
+        self.valor_porcentaje_a= round((1-(10**(prom_spec_a[knees_a[0]])/10**(total_log_a)))*100,2)
+        self.valor_porcentaje_b= round((1-(10**(prom_spec_b[knees_b[0]])/10**(total_log_b)))*100,2)-2
+        '''
+        print("")
+        print("Porcentaje_a",self.valor_porcentaje_a)
+        print("Porcentaje_b",self.valor_porcentaje_b)
+        
+        plt.style.use("ggplot")
+        plt.figure(figsize=(8, 6))
+        plt.plot(prom_spec_a)
+        plt.plot(knees_a,[prom_spec_a[i] for i in range(len(prom_spec_a)) if i in knees_a],'bo')
+        plt.plot(prom_spec_b)
+        plt.plot(knees_b,[prom_spec_b[y] for y in range(len(prom_spec_b)) if y in knees_b],'bo')
+        colors = ["r", "g", "k", "m", "c", "orange"]
+
+        for k, c, s in zip(knees_a, colors, sensitivity_a):
+            plt.vlines(k, min(prom_spec_a), max(prom_spec_a), linestyles="--", colors=c, label=f"S = {s}")
+        for k, c, s in zip(knees_b, colors, sensitivity_b):
+            plt.vlines(k, min(prom_spec_b), max(prom_spec_b), linestyles="--", colors=c, label=f"S = {s}")
+        plt.legend()
+        plt.show()
+        '''
+
+
     def multifreqs(self,lo,mode,freqs,ch,variable,code):
         
         location = {'11':{'Campaign':{'2.72':{'ch0':[[86,86,86],[38,38,37]],'ch1':[[86,86,86],[38,38,37]]},
@@ -338,8 +402,8 @@ class Reduccion():
 
             '51':{'Campaign':{'2.72':{'ch0':[[88,88,87],[35,34,36]],'ch1':[[86,89,86],[38,35,38]]},            
                               '3.64':{'ch0':[[86,84,87],[35,30,36]],'ch1':[[86,85,86],[38,37,38]]}},
-                    'Normal':{'2.72':{'ch0':[[92,90,88],[26,22,27]],'ch1':[[94,93,93],[22,22,22]]},   
-                              '3.64':{'ch0':[[88,90,88],[22,28,27]],'ch1':[[92,92,92],[20,22,20]]}}}, #Barranca Good
+                    'Normal':{'2.72':{'ch0':[[92,92,88],[23,22,24]],'ch1':[[91,93,93],[18,18,20]]},   
+                              '3.64':{'ch0':[[88,90,88],[22,26,25]],'ch1':[[92,92,92],[19,20,20]]}}}, #Barranca Good
 
             '61':{'Campaign':{'2.72':{'ch0':[[86,87,82],[42,39,50]],'ch1':[[86,86,86],[40,40,40]]},
                               '3.64':{'ch0':[[87,86,88],[37,35,35]],'ch1':[[86,86,86],[38,38,38]]}},
@@ -388,7 +452,7 @@ class Reduccion():
         med_profile = np.median(ch0.T,axis=0)
         med_total   = np.median(ch0.T)
 
-        index_med   = [index for index,value in enumerate(med_profile) if value < med_total]
+        index_med   = [index for index,value in enumerate(med_profile) if value <= med_total]
         newmatrix   = np.zeros((nrange,len(index_med)))
 
         for i in range(len(index_med)):

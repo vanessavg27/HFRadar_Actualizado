@@ -4,6 +4,7 @@ import os,sys
 import argparse
 from multiprocessing import Process, Value, Array, Lock
 from Reduc_HF import Reduccion
+#from Reduc_HF_test import Reduccion
 
 #./r_hf.py -f 2.72 -code 2 -C 1 -date "2022/08/29" -R 1 -P 1
 

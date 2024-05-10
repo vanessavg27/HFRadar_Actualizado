@@ -1,0 +1,32 @@
+#!/bin/bash
+
+#./Reduccion_total.sh 2022/08/0 11
+./Reduccion_total.sh 2022/08/1 11
+./Reduccion_total.sh 2022/08/2 11
+./Reduccion_total.sh 2022/08/3 11
+./Reduccion_total.sh 2022/08/4 11
+./Reduccion_total.sh 2022/08/5 11
+./Reduccion_total.sh 2022/08/6 11
+./Reduccion_total.sh 2022/08/7 11
+./Reduccion_total.sh 2022/08/8 11
+./Reduccion_total.sh 2022/08/9 11
+./Reduccion_total.sh 2022/08/10 11
+./Reduccion_total.sh 2022/08/11 11
+./Reduccion_total.sh 2022/08/12 11
+./Reduccion_total.sh 2022/08/13 11
+./Reduccion_total.sh 2022/08/14 11
+./Reduccion_total.sh 2022/08/15 11
+./Reduccion_total.sh 2022/08/16 11
+./Reduccion_total.sh 2022/08/17 11
+./Reduccion_total.sh 2022/08/18 11
+./Reduccion_total.sh 2022/08/19 11
+./Reduccion_total.sh 2022/08/20 11
+./Reduccion_total.sh 2022/08/21 11
+./Reduccion_total.sh 2022/08/22 11
+./Reduccion_total.sh 2022/08/23 11
+./Reduccion_total.sh 2022/08/24 11
+./Reduccion_total.sh 2022/08/25 11
+./Reduccion_total.sh 2022/08/26 11
+./Reduccion_total.sh 2022/08/27 11
+./Reduccion_total.sh 2022/08/28 11
+./Reduccion_total.sh 2022/08/29 11

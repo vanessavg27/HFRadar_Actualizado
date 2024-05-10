@@ -6,7 +6,7 @@ screen -S "delete" -d -m ./delete_gdf_size0.sh
 echo "Dont Forget sudo sysctl -w net.core.rmem_max=100000000"
 
 echo "Iniciando PRE-Procesamientos..."
-cd /home/soporte/recepcion_py3
+cd /home/soporte/Actualizado/Recepcion/
 echo "Iniciando F0"
 
 ###############################################################################################################################
